@@ -699,3 +699,52 @@ function initChartInsights() {
 
 attachInfoButtons();
 initChartInsights();
+
+// Panel collapse/expand functionality
+const filterPanel = document.querySelector('.filter-panel');
+const filterCollapseBtn = document.querySelector('.filter-collapse-btn');
+const filterExpandBtn = document.querySelector('.filter-expand-btn');
+const timelinePanel = document.querySelector('.timeline-panel');
+const timelineCollapseBtn = document.querySelector('.timeline-collapse-btn');
+const timelineExpandBtn = document.querySelector('.timeline-expand-btn');
+const container = document.querySelector('.container-xxl');
+
+// Function to update container padding when panels are collapsed/expanded
+function updateContainerPadding() {
+  const filterWidth = filterPanel.classList.contains('collapsed') ? 70 : 320;
+  const timelineWidth = timelinePanel.classList.contains('collapsed') ? 70 : 320;
+  
+  container.style.paddingLeft = `${filterWidth}px`;
+  container.style.paddingRight = `${timelineWidth}px`;
+}
+
+// Filter panel collapse
+filterCollapseBtn.addEventListener('click', () => {
+  filterPanel.classList.add('collapsed');
+  filterCollapseBtn.setAttribute('aria-label', 'Expand filter panel');
+  updateContainerPadding();
+});
+
+// Filter panel expand
+filterExpandBtn.addEventListener('click', () => {
+  filterPanel.classList.remove('collapsed');
+  filterCollapseBtn.setAttribute('aria-label', 'Collapse filter panel');
+  updateContainerPadding();
+});
+
+// Timeline panel collapse
+timelineCollapseBtn.addEventListener('click', () => {
+  timelinePanel.classList.add('collapsed');
+  timelineCollapseBtn.setAttribute('aria-label', 'Expand timeline panel');
+  updateContainerPadding();
+});
+
+// Timeline panel expand
+timelineExpandBtn.addEventListener('click', () => {
+  timelinePanel.classList.remove('collapsed');
+  timelineCollapseBtn.setAttribute('aria-label', 'Collapse timeline panel');
+  updateContainerPadding();
+});
+
+// Initialize container padding
+updateContainerPadding();

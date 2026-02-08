@@ -173,6 +173,60 @@ body::after {
   margin-bottom: 24px;
 }
 
+/* Panel expand buttons */
+.panel-expand-btn {
+  position: fixed;
+  top: 104px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1);
+}
+
+.panel-expand-btn:hover {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-color: #94a3b8;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+  transform: translateY(-1px);
+}
+
+.panel-expand-btn:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.filter-expand-btn {
+  left: 24px;
+}
+
+.timeline-expand-btn {
+  right: 24px;
+}
+
+/* Hide expand buttons when panels are visible */
+.filter-panel:not(.collapsed) ~ .filter-expand-btn,
+.timeline-panel:not(.collapsed) ~ .timeline-expand-btn {
+  display: none;
+}
+
+/* Show expand buttons only when panels are collapsed */
+.filter-panel.collapsed ~ .filter-expand-btn {
+  display: flex;
+}
+
+.timeline-panel.collapsed ~ .timeline-expand-btn {
+  display: flex;
+}
+
 .filter-panel {
   position: fixed;
   top: 104px;
@@ -187,6 +241,13 @@ body::after {
   z-index: 20;
   max-height: calc(100vh - 180px);
   overflow-y: auto;
+  transition: all 0.3s ease;
+}
+
+.filter-panel.collapsed {
+  transform: translateX(-100%);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .timeline-panel {
@@ -206,6 +267,59 @@ body::after {
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
+  transition: all 0.3s ease;
+}
+
+.timeline-panel.collapsed {
+  transform: translateX(100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.panel-collapse-btn {
+  position: absolute;
+  top: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1);
+}
+
+.panel-collapse-btn:hover {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-color: #94a3b8;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+  transform: translateY(-1px);
+}
+
+.panel-collapse-btn:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.filter-collapse-btn {
+  right: 18px;
+}
+
+.timeline-collapse-btn {
+  left: 18px;
+}
+
+.arrow-icon {
+  font-size: 18px;
+  font-weight: bold;
+  color: var(--primary);
+  transition: transform 0.3s ease;
+  display: block;
 }
 
 .timeline-panel::-webkit-scrollbar {
