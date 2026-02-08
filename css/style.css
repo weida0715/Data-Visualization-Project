@@ -245,6 +245,24 @@ body::after {
   direction: rtl;
 }
 
+.filter-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.filter-panel::-webkit-scrollbar-track {
+  background: #eef4ff;
+  border-radius: 999px;
+}
+
+.filter-panel::-webkit-scrollbar-thumb {
+  background: #bfd4ff;
+  border-radius: 999px;
+}
+
+.filter-panel > * {
+  direction: ltr;
+}
+
 .filter-panel.collapsed {
   transform: translateX(-100%);
   opacity: 0;

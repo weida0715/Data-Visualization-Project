@@ -61,7 +61,7 @@ let geoData = null;
 
 Promise.all([
   d3.csv("dataset/life_expectancy_clean.csv"),
-  d3.json("dataset/world.geojson"),
+  d3.json("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson"),
 ]).then(([loadedCsvData, loadedGeoData]) => {
   csvData = loadedCsvData;
   geoData = loadedGeoData;
@@ -116,7 +116,7 @@ function handleMouseOver(event, d) {
         Income Group: ${row.income_group}<br/>
         Region: ${row.region}<br/>
         ${currentIsAllYears ? "Avg Life Expectancy" : "Life Expectancy"}: ${row.life_expectancy.toFixed(1)}<br/>
-        Avg CO₂ Emissions: ${row.co2 ? row.co2.toLocaleString() : "N/A"}
+        CO₂ Emissions: ${row.co2 ? row.co2.toLocaleString() : "N/A"}
       `
       : `
         <strong>${d.properties.ADMIN}</strong><br/>
@@ -187,7 +187,7 @@ function drawLifeExpectancyMap(selectedYear) {
             income_group: values[0].income_group,
             region: values[0].region,
             life_expectancy: d3.mean(values, (v) => +v.life_expectancy),
-            co2: d3.mean(values, (v) => v.co2 && !isNaN(v.co2) ? +v.co2 : null)
+            co2: d3.mean(values, (v) => v.co2 ? +v.co2 : null),
           }),
           (d) => d.country_code,
         )
