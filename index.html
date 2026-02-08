@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Global Life Expectancy Dashboard</title>
+
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/style.css" />
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+  </head>
+
+  <body class="bg-light">
+    <div class="container-xxl px-4 px-lg-5 py-4">
+      <header class="dashboard-hero">
+        <div>
+          <p class="eyebrow">Sustainability & People</p>
+          <h1 class="display-5 fw-semibold">
+            Global Life Expectancy Dashboard
+          </h1>
+          <p class="lead text-muted">
+            A data story on how longevity shifts across countries, income
+            groups, and carbon emissions between 2001 and 2019.
+          </p>
+        </div>
+      </header>
+
+      <section class="summary-strip">
+        <div class="summary-card">
+          <p class="summary-label">Primary Lens</p>
+          <h3 class="summary-title">Life Expectancy</h3>
+          <p class="summary-meta">Country-level distribution</p>
+        </div>
+        <div class="summary-card">
+          <p class="summary-label">Secondary Lens</p>
+          <h3 class="summary-title">CO₂ & Income</h3>
+          <p class="summary-meta">Economic context & emissions</p>
+        </div>
+        <div class="summary-card">
+          <p class="summary-label">Long-term Lens</p>
+          <h3 class="summary-title">Trendlines</h3>
+          <p class="summary-meta">Income group trajectories</p>
+        </div>
+      </section>
+
+      <aside class="filter-panel">
+        <div class="filter-panel__header">
+          <p class="summary-label">Filters</p>
+          <h3 class="summary-title">Explore the dataset</h3>
+          <p class="summary-meta">
+            Timeline applies across charts. Other filters refine the map,
+            scatter, and regional view.
+          </p>
+        </div>
+        <div class="filter-section">
+          <div class="filter-section__title">Income groups</div>
+          <p class="filter-helper">Highlight income tiers across charts.</p>
+          <div id="income-filters" class="filter-grid">
+            <label
+              ><input
+                type="checkbox"
+                class="income-checkbox"
+                value="Low income"
+                checked
+              />
+              Low income</label
+            >
+            <label
+              ><input
+                type="checkbox"
+                class="income-checkbox"
+                value="Lower middle income"
+                checked
+              />
+              Lower middle income</label
+            >
+            <label
+              ><input
+                type="checkbox"
+                class="income-checkbox"
+                value="Upper middle income"
+                checked
+              />
+              Upper middle income</label
+            >
+            <label
+              ><input
+                type="checkbox"
+                class="income-checkbox"
+                value="High income"
+                checked
+              />
+              High income</label
+            >
+          </div>
+        </div>
+        <div class="filter-section">
+          <div class="filter-section__title">Regions</div>
+          <p class="filter-helper">Focus on specific geographic regions.</p>
+          <div id="region-filters" class="filter-grid"></div>
+        </div>
+        <div class="filter-section">
+          <div class="filter-section__title">Life expectancy range</div>
+          <p class="filter-helper">Filter countries by longevity (years).</p>
+          <div class="range-group">
+            <div class="range-row">
+              <label for="life-min">Min</label>
+              <span id="life-min-label" class="range-value"></span>
+            </div>
+            <input type="range" id="life-min" class="form-range" />
+            <div class="range-row">
+              <label for="life-max">Max</label>
+              <span id="life-max-label" class="range-value"></span>
+            </div>
+            <input type="range" id="life-max" class="form-range" />
+          </div>
+        </div>
+        <div class="filter-section">
+          <div class="filter-section__title">CO₂ emissions range</div>
+          <p class="filter-helper">Refine the scatter plot (metric tons).</p>
+          <div class="range-group">
+            <div class="range-row">
+              <label for="co2-min">Min</label>
+              <span id="co2-min-label" class="range-value"></span>
+            </div>
+            <input type="range" id="co2-min" class="form-range" />
+            <div class="range-row">
+              <label for="co2-max">Max</label>
+              <span id="co2-max-label" class="range-value"></span>
+            </div>
+            <input type="range" id="co2-max" class="form-range" />
+          </div>
+        </div>
+        <button id="reset-filters" class="btn btn-outline-secondary btn-sm">
+          Reset filters
+        </button>
+      </aside>
+
+      <aside class="timeline-panel">
+        <div class="filter-panel__header">
+          <p class="summary-label">Timestamp</p>
+          <h3 class="summary-title">Year</h3>
+          <p class="summary-meta">Move top to bottom to change the year.</p>
+        </div>
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <span class="year-pill" id="year-label"></span>
+          <button id="play-btn" class="btn btn-primary btn-sm">▶ Play</button>
+        </div>
+        <div class="timeline-slider">
+          <input
+            type="range"
+            id="year-slider"
+            class="form-range"
+            aria-label="Select year"
+          />
+          <div id="year-ticks" class="slider-ticks" aria-hidden="true"></div>
+        </div>
+      </aside>
+
+      <div class="row g-4">
+        <!-- Chart 1 -->
+        <div class="col-12">
+          <div class="card chart-card chart-map h-100">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Global overview</p>
+                <div class="chart-title-row">
+                  <h3 class="chart-title">Life Expectancy by Country</h3>
+                  <button
+                    class="chart-info-btn"
+                    data-chart="chart1"
+                    aria-label="Chart 1 insight"
+                    type="button"
+                  >
+                    i
+                  </button>
+                </div>
+              </div>
+              <p class="chart-note">
+                Click a country to spotlight its profile.
+              </p>
+            </div>
+            <div class="card-body">
+              <div class="map-layout">
+                <div class="map-info">
+                  <div id="side-panel" class="side-panel hidden">
+                    <h3 id="panel-country" class="h6">Country</h3>
+                    <p><strong>Year:</strong> <span id="panel-year"></span></p>
+                    <p>
+                      <strong>Life Expectancy:</strong>
+                      <span id="panel-life"></span>
+                    </p>
+                    <p>
+                      <strong>Income Group:</strong>
+                      <span id="panel-income"></span>
+                    </p>
+                    <p>
+                      <strong>Region:</strong> <span id="panel-region"></span>
+                    </p>
+                  </div>
+                </div>
+                <div class="map-toolbar" aria-label="Map zoom controls">
+                  <button
+                    id="map-zoom-in"
+                    class="btn btn-outline-primary btn-sm"
+                    type="button"
+                  >
+                    +
+                  </button>
+                  <button
+                    id="map-zoom-out"
+                    class="btn btn-outline-primary btn-sm"
+                    type="button"
+                  >
+                    −
+                  </button>
+                </div>
+                <svg id="map"></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chart 2 -->
+        <div class="col-12 col-xl-6">
+          <div class="card chart-card h-100">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Emissions context</p>
+                <div class="chart-title-row">
+                  <h3 class="chart-title">Life Expectancy vs CO₂</h3>
+                  <button
+                    class="chart-info-btn"
+                    data-chart="chart2"
+                    aria-label="Chart 2 insight"
+                    type="button"
+                  >
+                    i
+                  </button>
+                </div>
+              </div>
+              <p class="chart-note">Filter by income tier.</p>
+            </div>
+            <div class="card-body">
+              <div id="chart2"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chart 3 -->
+        <div class="col-12 col-xl-6">
+          <div class="card chart-card h-100">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Longitudinal view</p>
+                <div class="chart-title-row">
+                  <h3 class="chart-title">Income Group Trends</h3>
+                  <button
+                    class="chart-info-btn"
+                    data-chart="chart3"
+                    aria-label="Chart 3 insight"
+                    type="button"
+                  >
+                    i
+                  </button>
+                </div>
+              </div>
+              <p class="chart-note">
+                Average life expectancy by income tier over time.
+              </p>
+            </div>
+            <div class="card-body">
+              <div id="chart3"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chart 4 -->
+        <div class="col-12">
+          <div class="card chart-card">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Regional comparison</p>
+                <div class="chart-title-row">
+                  <h3 class="chart-title">Regional Trends</h3>
+                  <button
+                    class="chart-info-btn"
+                    data-chart="chart4"
+                    aria-label="Chart 4 insight"
+                    type="button"
+                  >
+                    i
+                  </button>
+                </div>
+              </div>
+              <p class="chart-note">
+                Compare life expectancy trajectories across regions.
+              </p>
+            </div>
+            <div class="card-body">
+              <div id="chart4"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chart 5 -->
+        <div class="col-12 col-xl-6">
+          <div class="card chart-card h-100">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Exploratory analysis</p>
+                <div class="chart-title-row">
+                  <h3 class="chart-title">Trend Smoothing</h3>
+                  <button
+                    class="chart-info-btn"
+                    data-chart="chart5"
+                    aria-label="Chart 5 insight"
+                    type="button"
+                  >
+                    i
+                  </button>
+                </div>
+              </div>
+              <p class="chart-note">
+                Raw vs 5-year rolling averages (toggle below).
+              </p>
+            </div>
+            <div class="card-body">
+              <div class="toggle-row" id="chart5-toggles">
+                <label
+                  ><input type="checkbox" id="toggle-raw" checked /> Raw
+                  series</label
+                >
+                <label
+                  ><input type="checkbox" id="toggle-avg" checked /> 5-year
+                  rolling avg</label
+                >
+              </div>
+              <div id="chart5"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chart 6 -->
+        <div class="col-12 col-xl-6">
+          <div class="card chart-card h-100">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Data transparency</p>
+                <div class="chart-title-row">
+                  <h3 class="chart-title">Missing Data Report</h3>
+                  <button
+                    class="chart-info-btn"
+                    data-chart="chart6"
+                    aria-label="Chart 6 insight"
+                    type="button"
+                  >
+                    i
+                  </button>
+                </div>
+              </div>
+              <p class="chart-note">
+                Share missingness to contextualize the dataset.
+              </p>
+            </div>
+            <div class="card-body">
+              <div id="chart6"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tooltip -->
+    <div id="tooltip" class="tooltip"></div>
+    <div id="info-tooltip" class="info-tooltip"></div>
+
+    <!-- Scripts -->
+    <script src="js/chart1_map.js"></script>
+    <script src="js/chart2_scatter.js"></script>
+    <script src="js/chart3_trends.js"></script>
+    <script src="js/chart4_regions.js"></script>
+    <script src="js/chart5_smoothing.js"></script>
+    <script src="js/chart6_missing.js"></script>
+    <script src="js/main.js"></script>
+  </body>
+</html>

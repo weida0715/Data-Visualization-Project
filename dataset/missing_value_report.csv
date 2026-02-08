@@ -1,0 +1,17 @@
+variable,missing_ratio
+corruption,0.6975625400898011
+sanitation,0.3636946760744067
+education_exp_pct,0.31205901218729953
+undernourishment,0.16484926234765876
+health_exp_pct,0.045542014111610005
+unemployment,0.03720333547145606
+co2,0.024374599101988453
+country,0.0
+year,0.0
+life_expectancy,0.0
+region,0.0
+income_group,0.0
+country_code,0.0
+injuries,0.0
+communicable,0.0
+non_communicable,0.0
