@@ -94,7 +94,10 @@ function drawRegionChart() {
 
   const grouped = d3.group(filtered, (d) => d.region);
 
-  regionX.domain(d3.extent(regionData, (d) => d.year));
+  const xDomain = isAllYears 
+    ? d3.extent(regionData, (d) => d.year) 
+    : [d3.min(regionData, (d) => d.year), selectedYear];
+  regionX.domain(xDomain);
   regionY.domain(d3.extent(filtered, (d) => d.life_expectancy)).nice();
 
   regionXAxis.call(d3.axisBottom(regionX).ticks(6).tickFormat(d3.format("d")));

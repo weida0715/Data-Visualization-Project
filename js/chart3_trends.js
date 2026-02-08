@@ -133,7 +133,10 @@ function drawTrendChart(selectedYear) {
   trendG.selectAll(".trend-label").remove();
 
   /* ---------- Scales ---------- */
-  TrendXScale.domain(d3.extent(data, (d) => d.year));
+  const xDomain = isAllYears 
+    ? d3.extent(data, (d) => d.year) 
+    : [d3.min(data, (d) => d.year), selectedYear];
+  TrendXScale.domain(xDomain);
   TrendYScale.domain([40, 85]); // fixed = fair comparison
 
   xAxisG.call(d3.axisBottom(TrendXScale).ticks(6).tickFormat(d3.format("d")));
