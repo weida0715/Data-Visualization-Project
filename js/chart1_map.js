@@ -18,7 +18,7 @@ const mapGroup = svg.append("g").attr("class", "map-group");
 const zoom = d3
   .zoom()
   .filter((event) => event.type !== "wheel")
-  .scaleExtent([1, 6])
+  .scaleExtent([1, 20])
   .on("zoom", (event) => {
     mapGroup.attr("transform", event.transform);
   });
