@@ -31,7 +31,6 @@ body::after {
   height: 100%;
   background: linear-gradient(180deg, #f7faff 0%, #eff5ff 100%);
   border-left: none;
-  pointer-events: none;
   z-index: -1;
 }
 
@@ -70,7 +69,7 @@ body::after {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 55%, #0ea5e9 100%);
+  background: #000000;
   color: #f8fafc;
   border-radius: 999px;
   padding: 4px 12px;
@@ -130,7 +129,8 @@ body::after {
   right: 24px;
   width: 270px;
   padding: 18px;
-  background: linear-gradient(180deg, #ffffff 0%, #f1f7ff 100%);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
   border: 1px solid var(--border);
   border-radius: 18px;
   box-shadow: var(--shadow);
@@ -138,10 +138,30 @@ body::after {
   height: calc(100vh - 180px);
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.timeline-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.timeline-panel::-webkit-scrollbar-track {
+  background: #eef4ff;
+  border-radius: 999px;
+}
+
+.timeline-panel::-webkit-scrollbar-thumb {
+  background: #bfd4ff;
+  border-radius: 999px;
+}
+
+.timeline-panel {
+  scrollbar-color: #bfd4ff #eef4ff;
 }
 
 .timeline-panel .filter-panel__header {
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border);
   padding-bottom: 10px;
   margin-bottom: 14px;
 }
@@ -158,6 +178,7 @@ body::after {
 
 .timeline-panel .summary-meta {
   font-size: 0.75rem;
+  color: var(--muted);
 }
 
 .timeline-panel .filter-section__title {
