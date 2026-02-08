@@ -309,17 +309,21 @@ function startPlaying() {
   yearLabel.text(START_YEAR);
   redrawDashboard(START_YEAR);
 
+  const dataYears = d3.range(START_YEAR, END_YEAR + 1);
+  let currentIndex = 0;
+
   playInterval = setInterval(() => {
-    let currentYear = +slider.property("value");
-    let currentIndex = years.indexOf(currentYear);
-
-    if (currentIndex < years.length - 1) {
-      const nextYear = years[currentIndex + 1];
+    if (currentIndex < dataYears.length - 1) {
+      currentIndex++;
+      const nextYear = dataYears[currentIndex];
       slider.property("value", nextYear);
-      yearLabel.text(nextYear === ALL_YEARS_VALUE ? ALL_YEARS_LABEL : nextYear);
-
+      yearLabel.text(nextYear);
       redrawDashboard(nextYear);
     } else {
+      // When playback finishes, default back to "All Year"
+      slider.property("value", ALL_YEARS_VALUE);
+      yearLabel.text(ALL_YEARS_LABEL);
+      redrawDashboard(ALL_YEARS_VALUE);
       stopPlaying();
     }
   }, 1200);

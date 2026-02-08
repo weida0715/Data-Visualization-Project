@@ -139,7 +139,22 @@ function drawTrendChart(selectedYear) {
   TrendXScale.domain(xDomain);
   TrendYScale.domain([40, 85]); // fixed = fair comparison
 
-  xAxisG.call(d3.axisBottom(TrendXScale).ticks(6).tickFormat(d3.format("d")));
+  // Custom tick generator to ensure unique integer years
+  const xTicks = [];
+  const xStart = Math.floor(xDomain[0]);
+  const xEnd = Math.ceil(xDomain[1]);
+  const tickStep = Math.max(1, Math.floor((xEnd - xStart) / 5)); // Aim for ~5-6 ticks
+  
+  for (let i = xStart; i <= xEnd; i += tickStep) {
+    xTicks.push(i);
+  }
+  
+  // Add final tick if not included
+  if (xTicks[xTicks.length - 1] < xEnd) {
+    xTicks.push(xEnd);
+  }
+  
+  xAxisG.call(d3.axisBottom(TrendXScale).tickValues(xTicks).tickFormat(d3.format("d")));
   yAxisG.call(d3.axisLeft(TrendYScale).ticks(6));
 
   trendG.selectAll(".trend-grid").remove();

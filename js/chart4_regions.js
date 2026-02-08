@@ -100,7 +100,22 @@ function drawRegionChart() {
   regionX.domain(xDomain);
   regionY.domain(d3.extent(filtered, (d) => d.life_expectancy)).nice();
 
-  regionXAxis.call(d3.axisBottom(regionX).ticks(6).tickFormat(d3.format("d")));
+  // Custom tick generator to ensure unique integer years
+  const xTicks = [];
+  const xStart = Math.floor(xDomain[0]);
+  const xEnd = Math.ceil(xDomain[1]);
+  const tickStep = Math.max(1, Math.floor((xEnd - xStart) / 5)); // Aim for ~5-6 ticks
+  
+  for (let i = xStart; i <= xEnd; i += tickStep) {
+    xTicks.push(i);
+  }
+  
+  // Add final tick if not included
+  if (xTicks[xTicks.length - 1] < xEnd) {
+    xTicks.push(xEnd);
+  }
+  
+  regionXAxis.call(d3.axisBottom(regionX).tickValues(xTicks).tickFormat(d3.format("d")));
   regionYAxis.call(d3.axisLeft(regionY).ticks(6));
 
   regionG.selectAll(".region-line").remove();

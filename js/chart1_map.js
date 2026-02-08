@@ -51,12 +51,40 @@ const projection = d3
 const path = d3.geoPath().projection(projection);
 
 // Color scale (sequential, examiner-safe)
-//const colorScale = d3.scaleSequential()
-// .interpolator(d3.interpolateGreens);
-
 const colorScale = d3
   .scaleSequential()
   .interpolator((t) => d3.interpolateGreens(t * 0.85 + 0.05));
+
+// Load data once
+let csvData = null;
+let geoData = null;
+
+Promise.all([
+  d3.csv("dataset/life_expectancy_clean.csv"),
+  d3.json("dataset/world.geojson"),
+]).then(([loadedCsvData, loadedGeoData]) => {
+  csvData = loadedCsvData;
+  geoData = loadedGeoData;
+  
+  // Initialize map with countries
+  const mapLayer = mapGroup.append("g").attr("class", "map-layer");
+  
+  mapLayer
+    .selectAll("path")
+    .data(geoData.features)
+    .join("path")
+    .attr("d", path)
+    .attr("stroke", "#999")
+    .attr("stroke-width", 0.4)
+    .attr("class", "country")
+    .attr("fill", "#eee")
+    .on("mouseover", handleMouseOver)
+    .on("mousemove", handleMouseMove)
+    .on("mouseout", handleMouseOut)
+    .on("click", handleClick);
+    
+  drawLifeExpectancyMap(null);
+});
 
 // Main draw function
 function getActiveGroups() {
@@ -73,154 +101,143 @@ function getDashboardFilters() {
   );
 }
 
+// Interaction handlers - Keep data map in closure for quick access
+let currentDataMap = new Map();
+let currentIsAllYears = true;
+
+function handleMouseOver(event, d) {
+  const row = currentDataMap.get(d.properties.SOV_A3);
+
+  tooltip.style("opacity", 1).html(
+    row
+      ? `
+        <strong>${row.country}</strong><br/>
+        ${currentIsAllYears ? "Avg Life Expectancy" : "Life Expectancy"}: ${
+          row.life_expectancy
+        }<br/>
+        Income Group: ${row.income_group}<br/>
+        Region: ${row.region}
+      `
+      : `
+        <strong>${d.properties.ADMIN}</strong><br/>
+        No data
+      `,
+  );
+}
+
+function handleMouseMove(event) {
+  tooltip
+    .style("left", event.pageX + 12 + "px")
+    .style("top", event.pageY + 12 + "px");
+}
+
+function handleMouseOut() {
+  tooltip.style("opacity", 0);
+}
+
+function handleClick(event, d) {
+  const row = currentDataMap.get(d.properties.SOV_A3);
+  
+  if (!row) return;
+
+  window.selectedCountryCode = d.properties.SOV_A3;
+
+  mapGroup.selectAll("path")
+    .classed("selected", (p) => p.properties.SOV_A3 === window.selectedCountryCode);
+
+  // Update side panel
+  panelCountry.text(row.country);
+  panelYear.text(currentIsAllYears ? "All Years" : getYearFilter());
+  panelLife.text(
+    Number.isFinite(row.life_expectancy)
+      ? row.life_expectancy.toFixed(1)
+      : "N/A",
+  );
+  panelIncome.text(row.income_group);
+  panelRegion.text(row.region);
+
+  sidePanel.classed("hidden", false);
+}
+
+// Update the data map when redrawing
 function drawLifeExpectancyMap(selectedYear) {
   const renderToken = ++latestMapRenderToken;
+  
+  if (!csvData || !geoData) return;
 
   selectedCountryCode = null;
   sidePanel.classed("hidden", true);
 
-  // Clear only paths (keep defs & svg)
-  mapGroup.selectAll("*").remove();
-  svg.selectAll("g.legend").remove();
-  svg.selectAll("defs").remove();
+  const activeGroups = getActiveGroups();
+  const filters = getDashboardFilters();
+  currentIsAllYears = !Number.isFinite(selectedYear);
+  const filtered = csvData
+    .filter((d) => (activeGroups ? activeGroups.has(d.income_group) : true))
+    .filter((d) =>
+      filters?.regions?.size ? filters.regions.has(d.region) : true,
+    );
 
-  svg.call(zoom.transform, d3.zoomIdentity);
+  const yearData = currentIsAllYears
+    ? d3
+        .rollups(
+          filtered,
+          (values) => ({
+            country: values[0].country,
+            country_code: values[0].country_code,
+            income_group: values[0].income_group,
+            region: values[0].region,
+            life_expectancy: d3.mean(values, (v) => +v.life_expectancy),
+          }),
+          (d) => d.country_code,
+        )
+        .map(([, value]) => value)
+    : filtered
+        .filter((d) => +d.year === selectedYear)
+        .map((d) => ({ ...d, life_expectancy: +d.life_expectancy }));
 
-  Promise.all([
-    d3.csv("dataset/life_expectancy_clean.csv"),
-    d3.json("dataset/world.geojson"),
-  ]).then(([csvData, geoData]) => {
-    if (renderToken !== latestMapRenderToken) return;
+  const lifeRange = filters.lifeRange || { min: null, max: null };
+  const filteredByLife = yearData.filter((d) => {
+    if (!Number.isFinite(d.life_expectancy)) return false;
+    if (lifeRange.min != null && d.life_expectancy < lifeRange.min)
+      return false;
+    if (lifeRange.max != null && d.life_expectancy > lifeRange.max)
+      return false;
+    return true;
+  });
 
-    const activeGroups = getActiveGroups();
-    const filters = getDashboardFilters();
-    const isAllYears = !Number.isFinite(selectedYear);
-    const filtered = csvData
-      .filter((d) => (activeGroups ? activeGroups.has(d.income_group) : true))
-      .filter((d) =>
-        filters?.regions?.size ? filters.regions.has(d.region) : true,
-      );
+  // Update the current data map for interactions
+  currentDataMap = new Map(filteredByLife.map((d) => [d.country_code, d]));
 
-    const yearData = isAllYears
-      ? d3
-          .rollups(
-            filtered,
-            (values) => ({
-              country: values[0].country,
-              country_code: values[0].country_code,
-              income_group: values[0].income_group,
-              region: values[0].region,
-              life_expectancy: d3.mean(values, (v) => +v.life_expectancy),
-            }),
-            (d) => d.country_code,
-          )
-          .map(([, value]) => value)
-      : filtered
-          .filter((d) => +d.year === selectedYear)
-          .map((d) => ({ ...d, life_expectancy: +d.life_expectancy }));
+  const lifeExtent = d3.extent(filteredByLife, (d) => d.life_expectancy);
+  colorScale.domain(lifeExtent[0] == null ? [0, 1] : lifeExtent);
 
-    const lifeRange = filters.lifeRange || { min: null, max: null };
-    const filteredByLife = yearData.filter((d) => {
-      if (!Number.isFinite(d.life_expectancy)) return false;
-      if (lifeRange.min != null && d.life_expectancy < lifeRange.min)
-        return false;
-      if (lifeRange.max != null && d.life_expectancy > lifeRange.max)
-        return false;
-      return true;
+  // Update colors with transition (no clearing)
+  mapGroup.selectAll(".country")
+    .transition()
+    .duration(500)
+    .attr("fill", (d) => {
+      const row = currentDataMap.get(d.properties.SOV_A3);
+      return row ? colorScale(row.life_expectancy) : "#eee";
     });
 
-    const dataMap = new Map(filteredByLife.map((d) => [d.country_code, d]));
+  // Update tooltip if mouse is currently hovering over a country
+  const hoveredCountry = document.querySelector('.country:hover');
+  if (hoveredCountry) {
+    // Find the corresponding geo feature
+    const geoFeatures = mapGroup.selectAll('.country').data();
+    const countryData = geoFeatures.find(f => {
+      return hoveredCountry.getAttribute('d') === path(f);
+    });
+    
+    if (countryData) {
+      handleMouseOver(null, countryData);
+    }
+  }
 
-    const lifeExtent = d3.extent(filteredByLife, (d) => d.life_expectancy);
-    colorScale.domain(lifeExtent[0] == null ? [0, 1] : lifeExtent);
-
-    // ---- MAP LAYER ----
-    const mapLayer = mapGroup.append("g").attr("class", "map-layer");
-
-    mapLayer
-      .selectAll("path")
-      .data(geoData.features)
-      .join("path")
-      .attr("d", path)
-      .attr("stroke", "#999")
-      .attr("stroke-width", 0.4)
-      .attr("class", "country")
-
-      // SET INITIAL FILL
-      .attr("fill", (d) => {
-        const row = dataMap.get(d.properties.SOV_A3);
-        return row ? colorScale(row.life_expectancy) : "#eee";
-      })
-
-      // Animate
-      .transition()
-      .duration(500)
-      .attr("fill", (d) => {
-        const row = dataMap.get(d.properties.SOV_A3);
-        return row ? colorScale(row.life_expectancy) : "#eee";
-      });
-
-    // ---- INTERACTION ----
-    mapLayer
-      .selectAll("path")
-      .on("mouseover", (event, d) => {
-        const row = dataMap.get(d.properties.SOV_A3);
-
-        tooltip.style("opacity", 1).html(
-          row
-            ? `
-            <strong>${row.country}</strong><br/>
-            ${isAllYears ? "Avg Life Expectancy" : "Life Expectancy"}: ${
-              row.life_expectancy
-            }<br/>
-            Income Group: ${row.income_group}<br/>
-            Region: ${row.region}
-          `
-            : `
-            <strong>${d.properties.ADMIN}</strong><br/>
-            No data
-          `,
-        );
-      })
-      .on("mousemove", (event) => {
-        tooltip
-          .style("left", event.pageX + 12 + "px")
-          .style("top", event.pageY + 12 + "px");
-      })
-      .on("mouseout", () => {
-        tooltip.style("opacity", 0);
-      })
-
-      // ---- CLICK SELECTION ----
-      .on("click", function (event, d) {
-        const row = dataMap.get(d.properties.SOV_A3);
-        if (!row) return;
-
-        window.selectedCountryCode = d.properties.SOV_A3;
-
-        mapLayer
-          .selectAll("path")
-          .classed(
-            "selected",
-            (p) => p.properties.SOV_A3 === window.selectedCountryCode,
-          );
-
-        // Update side panel
-        panelCountry.text(row.country);
-        panelYear.text(isAllYears ? "All Years" : selectedYear);
-        panelLife.text(
-          Number.isFinite(row.life_expectancy)
-            ? row.life_expectancy.toFixed(1)
-            : "N/A",
-        );
-        panelIncome.text(row.income_group);
-        panelRegion.text(row.region);
-
-        sidePanel.classed("hidden", false);
-      });
-
-    drawLegend();
-  });
+  // Update legend
+  svg.selectAll("g.legend").remove();
+  svg.selectAll("defs").remove();
+  drawLegend();
 }
 
 // Legend function
