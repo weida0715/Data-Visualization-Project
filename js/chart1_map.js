@@ -222,17 +222,10 @@ function drawLifeExpectancyMap(selectedYear) {
     });
 
   // Update tooltip if mouse is currently hovering over a country
-  const hoveredCountry = document.querySelector('.country:hover');
-  if (hoveredCountry) {
-    // Find the corresponding geo feature
-    const geoFeatures = mapGroup.selectAll('.country').data();
-    const countryData = geoFeatures.find(f => {
-      return hoveredCountry.getAttribute('d') === path(f);
-    });
-    
-    if (countryData) {
-      handleMouseOver(null, countryData);
-    }
+  const hoveredEl = document.querySelector(".country:hover");
+  if (hoveredEl) {
+    const hoveredDatum = d3.select(hoveredEl).datum(); // uses bound geo feature
+    if (hoveredDatum) handleMouseOver(null, hoveredDatum);
   }
 
   // Update legend
