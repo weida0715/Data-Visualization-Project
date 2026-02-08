@@ -117,53 +117,118 @@ d3.csv("dataset/life_expectancy_advanced.csv").then((raw) => {
 function drawMissingChart(year) {
   if (missingData.length === 0) return;
 
-  const isAllYears = !Number.isFinite(year);
-  const selectedKey = isAllYears ? "all" : year;
-  const yearEntry =
-    missingData.find((d) => d.year === selectedKey) || missingData[0];
+  const activeIncome =
+    window.activeIncomeGroups ||
+    new Set(
+      Array.from(document.querySelectorAll(".income-checkbox"))
+        .filter((cb) => cb.checked)
+        .map((cb) => cb.value),
+    );
+  
+  const filters = window.dashboardFilters || {};
+  const selectedRegions = filters.regions || new Set();
+  const lifeRange = filters.lifeRange || { min: null, max: null };
+  const co2Range = filters.co2Range || { min: null, max: null };
+  
+  // Load raw data to apply all filters
+  d3.csv("dataset/life_expectancy_advanced.csv").then((raw) => {
+    const parsed = raw.map((d) => ({
+      year: +d.year,
+      region: d.region,
+      income_group: d.income_group,
+      corruption: d.corruption === "" ? null : +d.corruption,
+      sanitation: d.sanitation === "" ? null : +d.sanitation,
+      education_exp_pct: d.education_exp_pct === "" ? null : +d.education_exp_pct,
+      undernourishment: d.undernourishment === "" ? null : +d.undernourishment,
+      health_exp_pct: d.health_exp_pct === "" ? null : +d.health_exp_pct,
+      unemployment: d.unemployment === "" ? null : +d.unemployment,
+      co2: d.co2 === "" ? null : +d.co2,
+      life_expectancy: d.life_expectancy === "" ? null : +d.life_expectancy,
+    }));
 
-  const sorted = missingVariables
-    .map((variable) => ({
-      variable,
-      missing_ratio: yearEntry?.ratios?.[variable] ?? 0,
-      missing_count: yearEntry?.counts?.[variable] ?? 0,
-      total_count: yearEntry?.totals ?? 0,
-    }))
-    .sort((a, b) => b.missing_ratio - a.missing_ratio);
+    // Apply all filters
+    const filtered = parsed.filter(d => {
+      // Income filter
+      if (!activeIncome.has(d.income_group)) return false;
+      
+      // Region filter
+      if (selectedRegions.size && !selectedRegions.has(d.region)) return false;
+      
+      // Year filter
+      if (Number.isFinite(year) && d.year !== year) return false;
+      
+      // Life range filter
+      if (Number.isFinite(d.life_expectancy)) {
+        if (lifeRange.min != null && d.life_expectancy < lifeRange.min) return false;
+        if (lifeRange.max != null && d.life_expectancy > lifeRange.max) return false;
+      }
+      
+      // CO2 range filter (only if present)
+      if (Number.isFinite(d.co2)) {
+        if (co2Range.min != null && d.co2 < co2Range.min) return false;
+        if (co2Range.max != null && d.co2 > co2Range.max) return false;
+      }
+      
+      return true;
+    });
 
-  missingX.domain([0, 1]);
-  missingY.domain(sorted.map((d) => d.variable));
+    // Calculate missing ratios from filtered data
+    const totals = filtered.length || 1;
+    const ratios = {};
+    const counts = {};
 
-  missingXAxis.call(
-    d3.axisBottom(missingX).ticks(5).tickFormat(d3.format(".0%")),
-  );
-  missingYAxis.call(d3.axisLeft(missingY));
+    missingVariables.forEach((variable) => {
+      const missingCount = filtered.reduce(
+        (acc, row) => (row[variable] == null ? acc + 1 : acc),
+        0,
+      );
+      ratios[variable] = missingCount / totals;
+      counts[variable] = missingCount;
+    });
 
-  const bars = missingG
-    .selectAll(".missing-bar")
-    .data(sorted, (d) => d.variable);
+    const sorted = missingVariables
+      .map((variable) => ({
+        variable,
+        missing_ratio: ratios[variable] ?? 0,
+        missing_count: counts[variable] ?? 0,
+        total_count: totals,
+      }))
+      .sort((a, b) => b.missing_ratio - a.missing_ratio);
 
-  bars
-    .join("rect")
-    .attr("class", "missing-bar")
-    .attr("x", 0)
-    .attr("y", (d) => missingY(d.variable))
-    .attr("height", missingY.bandwidth())
-    .attr("width", (d) => missingX(d.missing_ratio))
-    .attr("fill", "#94a3b8")
-    .on("mouseover", (event, d) => {
-      missingTooltip
-        .style("opacity", 1)
-        .html(
-          `${d.variable}<br/>Missing: ${d.missing_count} / ${d.total_count} (${(
-            d.missing_ratio * 100
-          ).toFixed(1)}%)`,
-        );
-    })
-    .on("mousemove", (event) => {
-      missingTooltip
-        .style("left", event.pageX + 12 + "px")
-        .style("top", event.pageY + 12 + "px");
-    })
-    .on("mouseout", () => missingTooltip.style("opacity", 0));
+    missingX.domain([0, 1]);
+    missingY.domain(sorted.map((d) => d.variable));
+
+    missingXAxis.call(
+      d3.axisBottom(missingX).ticks(5).tickFormat(d3.format(".0%")),
+    );
+    missingYAxis.call(d3.axisLeft(missingY));
+
+    const bars = missingG
+      .selectAll(".missing-bar")
+      .data(sorted, (d) => d.variable);
+
+    bars
+      .join("rect")
+      .attr("class", "missing-bar")
+      .attr("x", 0)
+      .attr("y", (d) => missingY(d.variable))
+      .attr("height", missingY.bandwidth())
+      .attr("width", (d) => missingX(d.missing_ratio))
+      .attr("fill", "#94a3b8")
+      .on("mouseover", (event, d) => {
+        missingTooltip
+          .style("opacity", 1)
+          .html(
+            `${d.variable}<br/>Missing: ${d.missing_count} / ${d.total_count} (${(
+              d.missing_ratio * 100
+            ).toFixed(1)}%)`,
+          );
+      })
+      .on("mousemove", (event) => {
+        missingTooltip
+          .style("left", event.pageX + 12 + "px")
+          .style("top", event.pageY + 12 + "px");
+      })
+      .on("mouseout", () => missingTooltip.style("opacity", 0));
+  });
 }

@@ -118,11 +118,12 @@ function redrawDashboard(year) {
     drawRegionChart();
   }
   if (typeof drawSmoothingChart === "function") {
-    drawSmoothingChart();
+    drawSmoothingChart(filterYear);
   }
   if (typeof drawMissingChart === "function") {
     drawMissingChart(filterYear);
   }
+  updateChartInsights(filterYear);
 }
 
 function renderYearTicks() {
@@ -340,6 +341,17 @@ const chartInsightText = {
   chart6: "Generating insight...",
 };
 
+let insightDataCache = null;
+const missingVariablesForInsight = [
+  "corruption",
+  "sanitation",
+  "education_exp_pct",
+  "undernourishment",
+  "health_exp_pct",
+  "unemployment",
+  "co2",
+];
+
 function showInfoTooltip(event, text) {
   const infoTooltip = document.getElementById("info-tooltip");
   if (!infoTooltip) return;
@@ -382,217 +394,301 @@ function avg(values) {
   return values.length ? d3.mean(values) : null;
 }
 
+function applyBaseFilters(rows, selectedYear, options = {}) {
+  const { requireCo2 = false } = options;
+  const activeIncome =
+    window.activeIncomeGroups instanceof Set ? window.activeIncomeGroups : null;
+  const regions = dashboardFilters?.regions || new Set();
+  const lifeRange = dashboardFilters?.lifeRange || { min: null, max: null };
+  const co2Range = dashboardFilters?.co2Range || { min: null, max: null };
+
+  return rows.filter((d) => {
+    if (activeIncome && d.income_group && !activeIncome.has(d.income_group)) {
+      return false;
+    }
+
+    if (regions.size && d.region && !regions.has(d.region)) {
+      return false;
+    }
+
+    if (
+      Number.isFinite(selectedYear) &&
+      Number.isFinite(d.year) &&
+      d.year !== selectedYear
+    ) {
+      return false;
+    }
+
+    if (Number.isFinite(d.life_expectancy)) {
+      if (lifeRange.min != null && d.life_expectancy < lifeRange.min)
+        return false;
+      if (lifeRange.max != null && d.life_expectancy > lifeRange.max)
+        return false;
+    }
+
+    if (requireCo2) {
+      if (!Number.isFinite(d.co2) || d.co2 <= 0) return false;
+      if (co2Range.min != null && d.co2 < co2Range.min) return false;
+      if (co2Range.max != null && d.co2 > co2Range.max) return false;
+    }
+
+    return true;
+  });
+}
+
+function updateChartInsights(selectedYear) {
+  if (!insightDataCache) return;
+
+  const lifeRows = applyBaseFilters(insightDataCache.life, selectedYear);
+  const scatterRows = applyBaseFilters(insightDataCache.life, selectedYear, {
+    requireCo2: true,
+  });
+
+  const yearContext = Number.isFinite(selectedYear)
+    ? `in ${selectedYear}`
+    : "across selected years";
+
+  // Chart 1
+  const countryMeans = d3
+    .rollups(
+      lifeRows.filter((d) => Number.isFinite(d.life_expectancy)),
+      (v) => d3.mean(v, (d) => d.life_expectancy),
+      (d) => d.country,
+    )
+    .map(([country, meanLife]) => ({ country, meanLife }))
+    .sort((a, b) => b.meanLife - a.meanLife);
+
+  if (countryMeans.length >= 2) {
+    const top = countryMeans[0];
+    const bottom = countryMeans[countryMeans.length - 1];
+    chartInsightText.chart1 = `Auto insight (${yearContext}): ${top.country} is highest (~${top.meanLife.toFixed(
+      1,
+    )} years) and ${bottom.country} is lowest (~${bottom.meanLife.toFixed(1)} years), showing a ${(top.meanLife - bottom.meanLife).toFixed(1)}-year gap under current filters.`;
+  } else {
+    chartInsightText.chart1 = `Auto insight (${yearContext}): Not enough filtered data for cross-country comparison.`;
+  }
+
+  // Chart 2
+  if (scatterRows.length >= 8) {
+    const xMean = d3.mean(scatterRows, (d) => Math.log(d.co2));
+    const yMean = d3.mean(scatterRows, (d) => d.life_expectancy);
+    const cov = d3.mean(
+      scatterRows,
+      (d) => (Math.log(d.co2) - xMean) * (d.life_expectancy - yMean),
+    );
+    const xSd = Math.sqrt(
+      d3.mean(scatterRows, (d) => (Math.log(d.co2) - xMean) ** 2),
+    );
+    const ySd = Math.sqrt(
+      d3.mean(scatterRows, (d) => (d.life_expectancy - yMean) ** 2),
+    );
+    const corr = xSd && ySd ? cov / (xSd * ySd) : 0;
+
+    chartInsightText.chart2 = `Auto insight (${yearContext}): Filtered CO₂ vs life expectancy relationship is ${corr >= 0 ? "positive" : "negative"} (r ≈ ${corr.toFixed(
+      2,
+    )}). ${scatterRows.length} country-year records satisfy the current filters.`;
+  } else {
+    chartInsightText.chart2 = `Auto insight (${yearContext}): Too few filtered points for a reliable CO₂ relationship.`;
+  }
+
+  // Chart 3
+  const incomeSeries = d3
+    .rollups(
+      lifeRows.filter((d) => Number.isFinite(d.life_expectancy)),
+      (v) => {
+        const sorted = [...v].sort((a, b) => a.year - b.year);
+        const start = sorted[0]?.life_expectancy;
+        const end = sorted[sorted.length - 1]?.life_expectancy;
+        return {
+          start,
+          end,
+          gain:
+            Number.isFinite(start) && Number.isFinite(end) ? end - start : null,
+        };
+      },
+      (d) => d.income_group,
+    )
+    .map(([group, stats]) => ({ group, ...stats }))
+    .filter((d) => d.group && Number.isFinite(d.gain))
+    .sort((a, b) => b.gain - a.gain);
+
+  if (incomeSeries.length) {
+    const top = incomeSeries[0];
+    chartInsightText.chart3 = `Auto insight (${yearContext}): ${top.group} shows the strongest filtered improvement (${top.gain.toFixed(
+      1,
+    )} years from ${top.start.toFixed(1)} to ${top.end.toFixed(1)}).`;
+  } else {
+    chartInsightText.chart3 = `Auto insight (${yearContext}): Not enough filtered income-group trend data.`;
+  }
+
+  // Chart 4
+  const regionStats = d3
+    .rollups(
+      lifeRows.filter((d) => Number.isFinite(d.life_expectancy)),
+      (v) => {
+        const sorted = [...v].sort((a, b) => a.year - b.year);
+        const latest = sorted[sorted.length - 1]?.life_expectancy;
+        const start = sorted[0]?.life_expectancy;
+        return {
+          latest,
+          gain:
+            Number.isFinite(start) && Number.isFinite(latest)
+              ? latest - start
+              : null,
+        };
+      },
+      (d) => d.region,
+    )
+    .map(([region, stats]) => ({ region, ...stats }));
+
+  const topRegion = [...regionStats]
+    .filter((d) => Number.isFinite(d.latest))
+    .sort((a, b) => b.latest - a.latest)[0];
+
+  if (topRegion) {
+    chartInsightText.chart4 = `Auto insight (${yearContext}): ${topRegion.region} has the highest filtered regional life expectancy (~${topRegion.latest.toFixed(
+      1,
+    )} years).`;
+  } else {
+    chartInsightText.chart4 = `Auto insight (${yearContext}): Not enough filtered regional data.`;
+  }
+
+  // Chart 5 (AUC by income group)
+  const aucByIncome = d3
+    .rollups(
+      lifeRows.filter((d) => Number.isFinite(d.life_expectancy)),
+      (groupRows) => {
+        const yearlyMeans = d3
+          .rollups(
+            groupRows,
+            (v) => d3.mean(v, (d) => d.life_expectancy),
+            (d) => d.year,
+          )
+          .map(([year, life]) => ({ year, life }))
+          .filter((d) => Number.isFinite(d.life))
+          .sort((a, b) => a.year - b.year);
+
+        if (!yearlyMeans.length) return null;
+        if (yearlyMeans.length === 1) {
+          return {
+            aucRaw: yearlyMeans[0].life,
+            aucNormalized: yearlyMeans[0].life,
+            spanYears: 1,
+          };
+        }
+
+        let aucRaw = 0;
+        for (let i = 0; i < yearlyMeans.length - 1; i += 1) {
+          const left = yearlyMeans[i];
+          const right = yearlyMeans[i + 1];
+          aucRaw += ((left.life + right.life) / 2) * (right.year - left.year);
+        }
+
+        const spanYears = Math.max(
+          1,
+          yearlyMeans[yearlyMeans.length - 1].year - yearlyMeans[0].year,
+        );
+
+        return {
+          aucRaw,
+          aucNormalized: aucRaw / spanYears,
+          spanYears,
+        };
+      },
+      (d) => d.income_group,
+    )
+    .map(([group, stats]) => ({ group, ...stats }))
+    .filter((d) => d.group && d && Number.isFinite(d.aucNormalized))
+    .sort((a, b) => b.aucNormalized - a.aucNormalized);
+
+  if (aucByIncome.length >= 2) {
+    const top = aucByIncome[0];
+    const bottom = aucByIncome[aucByIncome.length - 1];
+    const gap = top.aucNormalized - bottom.aucNormalized;
+    chartInsightText.chart5 = `Auto insight (${yearContext}): ${top.group} has the strongest cumulative life expectancy profile (AUC-normalized ≈ ${top.aucNormalized.toFixed(
+      2,
+    )}), while ${bottom.group} is lowest (≈ ${bottom.aucNormalized.toFixed(
+      2,
+    )}). Gap: ${gap.toFixed(2)} years.`;
+  } else if (aucByIncome.length === 1) {
+    const only = aucByIncome[0];
+    chartInsightText.chart5 = `Auto insight (${yearContext}): Only ${only.group} remains under current filters (AUC-normalized ≈ ${only.aucNormalized.toFixed(
+      2,
+    )}).`;
+  } else {
+    chartInsightText.chart5 = `Auto insight (${yearContext}): Not enough filtered records to compute AUC-based comparison.`;
+  }
+
+  // Chart 6
+  const advancedRows = applyBaseFilters(
+    insightDataCache.advanced,
+    selectedYear,
+  );
+
+  if (!advancedRows.length) {
+    chartInsightText.chart6 = `Auto insight (${yearContext}): Not enough filtered rows to assess missingness.`;
+  } else {
+    const missingStats = missingVariablesForInsight
+      .map((key) => {
+        const count = advancedRows.reduce(
+          (acc, row) => (row[key] == null ? acc + 1 : acc),
+          0,
+        );
+        return {
+          key,
+          count,
+          ratio: count / advancedRows.length,
+        };
+      })
+      .sort((a, b) => b.ratio - a.ratio);
+
+    const topMissing = missingStats[0];
+    chartInsightText.chart6 = `Auto insight (${yearContext}): Most missing column is ${topMissing.key} with ${topMissing.count} missing values (${(
+      topMissing.ratio * 100
+    ).toFixed(1)}%).`;
+  }
+}
+
 function initChartInsights() {
   Promise.all([
     d3.csv("dataset/life_expectancy_clean.csv"),
-    d3.csv("dataset/income_year_summary.csv"),
-    d3.csv("dataset/region_year_summary.csv"),
     d3.csv("dataset/life_expectancy_advanced.csv"),
   ])
-    .then(([lifeRaw, incomeTrendRaw, regionTrendRaw, advancedRaw]) => {
-      const life = lifeRaw.map((d) => ({
-        country: d.country,
-        country_code: d.country_code,
-        income_group: d.income_group,
-        region: d.region,
-        year: +d.year,
-        life_expectancy: +d.life_expectancy,
-        co2: d.co2 === "" ? null : +d.co2,
-      }));
+    .then(([lifeRaw, advancedRaw]) => {
+      insightDataCache = {
+        life: lifeRaw.map((d) => ({
+          country: d.country,
+          country_code: d.country_code,
+          income_group: d.income_group,
+          region: d.region,
+          year: +d.year,
+          life_expectancy: +d.life_expectancy,
+          co2: d.co2 === "" ? null : +d.co2,
+        })),
+        advanced: advancedRaw.map((d) => ({
+          income_group: d.income_group,
+          region: d.region,
+          year: +d.year,
+          life_expectancy: d.life_expectancy === "" ? null : +d.life_expectancy,
+          life_expectancy_5yr_avg:
+            d.life_expectancy_5yr_avg === ""
+              ? null
+              : +d.life_expectancy_5yr_avg,
+          co2_missing: d.co2 === "",
+          corruption: d.corruption === "" ? null : +d.corruption,
+          sanitation: d.sanitation === "" ? null : +d.sanitation,
+          education_exp_pct:
+            d.education_exp_pct === "" ? null : +d.education_exp_pct,
+          undernourishment:
+            d.undernourishment === "" ? null : +d.undernourishment,
+          health_exp_pct: d.health_exp_pct === "" ? null : +d.health_exp_pct,
+          unemployment: d.unemployment === "" ? null : +d.unemployment,
+          co2: d.co2 === "" ? null : +d.co2,
+        })),
+      };
 
-      const countryMeans = d3
-        .rollups(
-          life.filter((d) => Number.isFinite(d.life_expectancy)),
-          (v) => d3.mean(v, (d) => d.life_expectancy),
-          (d) => d.country,
-        )
-        .map(([country, meanLife]) => ({ country, meanLife }))
-        .sort((a, b) => b.meanLife - a.meanLife);
-
-      const topCountry = countryMeans[0];
-      const bottomCountry = countryMeans[countryMeans.length - 1];
-
-      chartInsightText.chart1 =
-        topCountry && bottomCountry
-          ? `Auto insight: Across the full period, ${topCountry.country} records the highest average life expectancy (~${topCountry.meanLife.toFixed(
-              1,
-            )} years), while ${bottomCountry.country} is lowest (~${bottomCountry.meanLife.toFixed(
-              1,
-            )}). This highlights a persistent cross-country longevity gap.`
-          : "Auto insight unavailable for map chart.";
-
-      const scatterRows = life.filter(
-        (d) =>
-          Number.isFinite(d.co2) &&
-          d.co2 > 0 &&
-          Number.isFinite(d.life_expectancy),
-      );
-
-      const xMean = d3.mean(scatterRows, (d) => Math.log(d.co2));
-      const yMean = d3.mean(scatterRows, (d) => d.life_expectancy);
-      const cov = d3.mean(
-        scatterRows,
-        (d) => (Math.log(d.co2) - xMean) * (d.life_expectancy - yMean),
-      );
-      const xSd = Math.sqrt(
-        d3.mean(scatterRows, (d) => (Math.log(d.co2) - xMean) ** 2),
-      );
-      const ySd = Math.sqrt(
-        d3.mean(scatterRows, (d) => (d.life_expectancy - yMean) ** 2),
-      );
-      const corr = xSd && ySd ? cov / (xSd * ySd) : null;
-
-      const incomeLife = d3.rollups(
-        scatterRows,
-        (v) => d3.mean(v, (d) => d.life_expectancy),
-        (d) => d.income_group,
-      );
-      const incomeMap = new Map(incomeLife);
-      const highIncomeLife = incomeMap.get("High income");
-      const lowIncomeLife = incomeMap.get("Low income");
-      const incomeGap =
-        Number.isFinite(highIncomeLife) && Number.isFinite(lowIncomeLife)
-          ? highIncomeLife - lowIncomeLife
-          : null;
-
-      chartInsightText.chart2 =
-        corr != null
-          ? `Auto insight: Life expectancy and CO₂ (log scale) show a ${corr >= 0 ? "positive" : "negative"} association (r ≈ ${corr.toFixed(
-              2,
-            )}). The average life expectancy gap between high-income and low-income groups is about ${
-              incomeGap != null ? incomeGap.toFixed(1) : "N/A"
-            } years.`
-          : "Auto insight unavailable for scatter chart.";
-
-      const incomeTrend = incomeTrendRaw.map((d) => ({
-        income_group: d.income_group,
-        year: +d.year,
-        life_expectancy: +d.life_expectancy,
-      }));
-
-      const incomeGain = d3
-        .rollups(
-          incomeTrend,
-          (v) => {
-            const sorted = v.sort((a, b) => a.year - b.year);
-            return {
-              start: sorted[0]?.life_expectancy,
-              end: sorted[sorted.length - 1]?.life_expectancy,
-              gain:
-                Number.isFinite(sorted[0]?.life_expectancy) &&
-                Number.isFinite(sorted[sorted.length - 1]?.life_expectancy)
-                  ? sorted[sorted.length - 1].life_expectancy -
-                    sorted[0].life_expectancy
-                  : null,
-            };
-          },
-          (d) => d.income_group,
-        )
-        .map(([group, stats]) => ({ group, ...stats }))
-        .filter((d) => Number.isFinite(d.gain))
-        .sort((a, b) => b.gain - a.gain);
-
-      const topImproverIncome = incomeGain[0];
-      chartInsightText.chart3 = topImproverIncome
-        ? `Auto insight: ${topImproverIncome.group} shows the largest improvement over time, rising by about ${topImproverIncome.gain.toFixed(
-            1,
-          )} years (from ${topImproverIncome.start.toFixed(1)} to ${topImproverIncome.end.toFixed(1)}).`
-        : "Auto insight unavailable for income trends chart.";
-
-      const regionTrend = regionTrendRaw.map((d) => ({
-        region: d.region,
-        year: +d.year,
-        life_expectancy: +d.life_expectancy,
-      }));
-
-      const regionStats = d3
-        .rollups(
-          regionTrend,
-          (v) => {
-            const sorted = v.sort((a, b) => a.year - b.year);
-            return {
-              latest: sorted[sorted.length - 1]?.life_expectancy,
-              gain:
-                Number.isFinite(sorted[0]?.life_expectancy) &&
-                Number.isFinite(sorted[sorted.length - 1]?.life_expectancy)
-                  ? sorted[sorted.length - 1].life_expectancy -
-                    sorted[0].life_expectancy
-                  : null,
-            };
-          },
-          (d) => d.region,
-        )
-        .map(([region, stats]) => ({ region, ...stats }));
-
-      const bestLatestRegion = [...regionStats]
-        .filter((d) => Number.isFinite(d.latest))
-        .sort((a, b) => b.latest - a.latest)[0];
-      const bestGainRegion = [...regionStats]
-        .filter((d) => Number.isFinite(d.gain))
-        .sort((a, b) => b.gain - a.gain)[0];
-
-      chartInsightText.chart4 =
-        bestLatestRegion && bestGainRegion
-          ? `Auto insight: ${bestLatestRegion.region} currently has the highest regional life expectancy (~${bestLatestRegion.latest.toFixed(
-              1,
-            )} years), while ${bestGainRegion.region} records the largest long-term gain (~${bestGainRegion.gain.toFixed(
-              1,
-            )} years).`
-          : "Auto insight unavailable for regional trends chart.";
-
-      const advanced = advancedRaw.map((d) => ({
-        life_expectancy: d.life_expectancy === "" ? null : +d.life_expectancy,
-        life_expectancy_5yr_avg:
-          d.life_expectancy_5yr_avg === "" ? null : +d.life_expectancy_5yr_avg,
-        interpolated: d.life_expectancy_was_interpolated === "True",
-      }));
-
-      const validPairs = advanced.filter(
-        (d) =>
-          Number.isFinite(d.life_expectancy) &&
-          Number.isFinite(d.life_expectancy_5yr_avg),
-      );
-      const avgAbsGap = d3.mean(validPairs, (d) =>
-        Math.abs(d.life_expectancy - d.life_expectancy_5yr_avg),
-      );
-      const interpolatedShare = d3.mean(advanced, (d) =>
-        d.interpolated ? 1 : 0,
-      );
-
-      chartInsightText.chart5 =
-        avgAbsGap != null
-          ? `Auto insight: The 5-year rolling average differs from yearly raw values by about ${avgAbsGap.toFixed(
-              2,
-            )} years on average, indicating moderate year-to-year volatility. Interpolated records account for roughly ${(
-              interpolatedShare * 100
-            ).toFixed(1)}% of observations.`
-          : "Auto insight unavailable for smoothing chart.";
-
-      const missingVariables = [
-        "corruption",
-        "sanitation",
-        "education_exp_pct",
-        "undernourishment",
-        "health_exp_pct",
-        "unemployment",
-        "co2",
-      ];
-
-      const missingRatios = missingVariables
-        .map((key) => {
-          const ratio = d3.mean(advancedRaw, (d) => (d[key] === "" ? 1 : 0));
-          return { key, ratio: ratio ?? 0 };
-        })
-        .sort((a, b) => b.ratio - a.ratio);
-
-      const topMissing = missingRatios[0];
-      chartInsightText.chart6 = topMissing
-        ? `Auto insight: ${topMissing.key} is the most incomplete field, with about ${(
-            topMissing.ratio * 100
-          ).toFixed(
-            1,
-          )}% missing entries. Use this chart to gauge uncertainty before interpreting related patterns.`
-        : "Auto insight unavailable for missing-data chart.";
+      const currentYear = getYearFilter();
+      updateChartInsights(currentYear === ALL_YEARS_VALUE ? null : currentYear);
     })
     .catch(() => {
       Object.keys(chartInsightText).forEach((key) => {

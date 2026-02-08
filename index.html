@@ -16,7 +16,7 @@
   <body class="bg-light">
     <div class="container-xxl px-4 px-lg-5 py-4">
       <header class="dashboard-hero">
-        <div>
+        <div class="hero-content">
           <p class="eyebrow">Sustainability & People</p>
           <h1 class="display-5 fw-semibold">
             Global Life Expectancy Dashboard
@@ -25,6 +25,19 @@
             A data story on how longevity shifts across countries, income
             groups, and carbon emissions between 2001 and 2019.
           </p>
+        </div>
+        <div class="group-members">
+          <div class="member-grid">
+            <div class="member-card">
+              <h4>Group Number: G08</h4>
+              <p>Group Members:</p>
+              <ul class="member-list">
+                <li>Ng Wei Da (1211107034)</li>
+                <li>Chow Shu Ling (1211109470)</li>
+                <li>Chan Zheng Uee (1231302741)</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -51,8 +64,8 @@
           <p class="summary-label">Filters</p>
           <h3 class="summary-title">Explore the dataset</h3>
           <p class="summary-meta">
-            Timeline applies across charts. Other filters refine the map,
-            scatter, and regional view.
+            All filters apply across all charts. Timeline (year) updates every
+            visual, while other filters refine specific data subsets.
           </p>
         </div>
         <div class="filter-section">
@@ -180,7 +193,7 @@
                 </div>
               </div>
               <p class="chart-note">
-                Click a country to spotlight its profile.
+                Shows life expectancy distribution across countries with color coding. Click a country to view details.
               </p>
             </div>
             <div class="card-body">
@@ -242,7 +255,9 @@
                   </button>
                 </div>
               </div>
-              <p class="chart-note">Filter by income tier.</p>
+              <p class="chart-note">
+                Scatter plot showing relationship between life expectancy and CO₂ emissions, with income group trend lines.
+              </p>
             </div>
             <div class="card-body">
               <div id="chart2"></div>
@@ -269,7 +284,7 @@
                 </div>
               </div>
               <p class="chart-note">
-                Average life expectancy by income tier over time.
+                Line chart tracking average life expectancy trends for each income group from 2001 to 2019.
               </p>
             </div>
             <div class="card-body">
@@ -297,7 +312,7 @@
                 </div>
               </div>
               <p class="chart-note">
-                Compare life expectancy trajectories across regions.
+                Multi-line chart comparing life expectancy trends across different geographic regions.
               </p>
             </div>
             <div class="card-body">
@@ -313,7 +328,7 @@
               <div>
                 <p class="eyebrow">Exploratory analysis</p>
                 <div class="chart-title-row">
-                  <h3 class="chart-title">Trend Smoothing</h3>
+                  <h3 class="chart-title">Cumulative Life Expectancy (AUC)</h3>
                   <button
                     class="chart-info-btn"
                     data-chart="chart5"
@@ -325,20 +340,10 @@
                 </div>
               </div>
               <p class="chart-note">
-                Raw vs 5-year rolling averages (toggle below).
+                Horizontal bar chart showing cumulative life expectancy (AUC) by income group, normalized by time span.
               </p>
             </div>
             <div class="card-body">
-              <div class="toggle-row" id="chart5-toggles">
-                <label
-                  ><input type="checkbox" id="toggle-raw" checked /> Raw
-                  series</label
-                >
-                <label
-                  ><input type="checkbox" id="toggle-avg" checked /> 5-year
-                  rolling avg</label
-                >
-              </div>
               <div id="chart5"></div>
             </div>
           </div>
@@ -363,7 +368,7 @@
                 </div>
               </div>
               <p class="chart-note">
-                Share missingness to contextualize the dataset.
+                Horizontal bar chart showing the ratio of missing values for various indicators in the dataset.
               </p>
             </div>
             <div class="card-body">

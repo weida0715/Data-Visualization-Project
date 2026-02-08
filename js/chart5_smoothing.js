@@ -1,196 +1,239 @@
 /**
- * Chart 5 — Exploratory Trend Smoothing
- * Layered line chart with toggle for raw vs 5-year rolling average
+ * Chart 5 — Cumulative Life Expectancy (AUC)
+ * Horizontal bar chart by income group using filtered records.
  */
 
-const smoothingMargin = { top: 60, right: 120, bottom: 70, left: 90 };
-const smoothingWidth = 900 - smoothingMargin.left - smoothingMargin.right;
-const smoothingHeight = 420 - smoothingMargin.top - smoothingMargin.bottom;
+const aucMargin = { top: 40, right: 80, bottom: 45, left: 180 };
+const aucWidth = 900 - aucMargin.left - aucMargin.right;
+const aucHeight = 420 - aucMargin.top - aucMargin.bottom;
 
-const smoothingSvg = d3
+const aucSvg = d3
   .select("#chart5")
   .append("svg")
-  .attr("width", smoothingWidth + smoothingMargin.left + smoothingMargin.right)
-  .attr(
-    "height",
-    smoothingHeight + smoothingMargin.top + smoothingMargin.bottom,
-  )
+  .attr("width", aucWidth + aucMargin.left + aucMargin.right)
+  .attr("height", aucHeight + aucMargin.top + aucMargin.bottom)
   .attr(
     "viewBox",
-    `0 0 ${smoothingWidth + smoothingMargin.left + smoothingMargin.right} ${
-      smoothingHeight + smoothingMargin.top + smoothingMargin.bottom
+    `0 0 ${aucWidth + aucMargin.left + aucMargin.right} ${
+      aucHeight + aucMargin.top + aucMargin.bottom
     }`,
   )
   .attr("preserveAspectRatio", "xMidYMid meet")
   .style("width", "100%")
   .style("height", "auto");
 
-const smoothingG = smoothingSvg
+const aucG = aucSvg
   .append("g")
-  .attr(
-    "transform",
-    `translate(${smoothingMargin.left},${smoothingMargin.top})`,
-  );
+  .attr("transform", `translate(${aucMargin.left},${aucMargin.top})`);
 
-const smoothingTooltip = d3.select("#tooltip");
+const aucTooltip = d3.select("#tooltip");
 
-const smoothingX = d3.scaleLinear().range([0, smoothingWidth]);
-const smoothingY = d3.scaleLinear().range([smoothingHeight, 0]);
+const aucX = d3.scaleLinear().range([0, aucWidth]);
+const aucY = d3.scaleBand().range([0, aucHeight]).padding(0.25);
 
-const smoothingXAxis = smoothingG
+const aucXAxis = aucG
   .append("g")
   .attr("class", "axis")
-  .attr("transform", `translate(0,${smoothingHeight})`);
+  .attr("transform", `translate(0,${aucHeight})`);
 
-const smoothingYAxis = smoothingG.append("g").attr("class", "axis");
+const aucYAxis = aucG.append("g").attr("class", "axis");
 
-smoothingSvg
+const aucEmptyLabel = aucG
   .append("text")
   .attr("class", "axis-label")
-  .attr("x", smoothingMargin.left + smoothingWidth / 2)
-  .attr("y", smoothingHeight + smoothingMargin.top + 40)
+  .attr("x", aucWidth / 2)
+  .attr("y", aucHeight / 2)
   .attr("text-anchor", "middle")
-  .text("Year");
+  .style("display", "none")
+  .text("No data under current filters.");
 
-smoothingSvg
+aucSvg
   .append("text")
   .attr("class", "axis-label")
-  .attr("transform", "rotate(-90)")
-  .attr("x", -(smoothingMargin.top + smoothingHeight / 2))
-  .attr("y", 20)
+  .attr("x", aucMargin.left + aucWidth / 2)
+  .attr("y", aucHeight + aucMargin.top + 35)
   .attr("text-anchor", "middle")
-  .text("Life Expectancy (years)");
+  .text("AUC-normalized life expectancy (years)");
 
-const rawLine = d3
-  .line()
-  .x((d) => smoothingX(d.year))
-  .y((d) => smoothingY(d.life_expectancy));
+const incomeColor = {
+  "Low income": "#f59e0b",
+  "Lower middle income": "#38bdf8",
+  "Upper middle income": "#6366f1",
+  "High income": "#10b981",
+};
 
-const avgLine = d3
-  .line()
-  .x((d) => smoothingX(d.year))
-  .y((d) => smoothingY(d.life_expectancy_5yr_avg));
+let aucData = [];
 
-let smoothingData = [];
-
-d3.csv("dataset/life_expectancy_advanced.csv").then((raw) => {
-  const parsed = raw.map((d) => ({
+d3.csv("dataset/life_expectancy_clean.csv").then((raw) => {
+  aucData = raw.map((d) => ({
+    income_group: d.income_group,
+    region: d.region,
     year: +d.year,
     life_expectancy: +d.life_expectancy,
-    life_expectancy_5yr_avg: +d.life_expectancy_5yr_avg,
-    interpolated: d.life_expectancy_was_interpolated === "True",
+    co2: d.co2 === "" ? null : +d.co2,
   }));
-
-  const grouped = d3.rollups(
-    parsed,
-    (values) => {
-      const validLife = values.filter((d) =>
-        Number.isFinite(d.life_expectancy),
-      );
-      const validAvg = values.filter((d) =>
-        Number.isFinite(d.life_expectancy_5yr_avg),
-      );
-
-      return {
-        life_expectancy: d3.mean(validLife, (d) => d.life_expectancy),
-        life_expectancy_5yr_avg: d3.mean(
-          validAvg,
-          (d) => d.life_expectancy_5yr_avg,
-        ),
-        interpolated_share: d3.mean(values, (d) => (d.interpolated ? 1 : 0)),
-      };
-    },
-    (d) => d.year,
-  );
-
-  smoothingData = grouped
-    .map(([year, stats]) => ({
-      year,
-      life_expectancy: stats.life_expectancy,
-      life_expectancy_5yr_avg: stats.life_expectancy_5yr_avg,
-      interpolated_share: stats.interpolated_share || 0,
-    }))
-    .filter((d) => Number.isFinite(d.life_expectancy))
-    .sort((a, b) => a.year - b.year);
 
   drawSmoothingChart();
 });
 
-function drawSmoothingChart() {
-  if (smoothingData.length === 0) return;
+function getFilteredAucRows(selectedYear) {
+  const activeIncome =
+    window.activeIncomeGroups instanceof Set ? window.activeIncomeGroups : null;
+  const dashboardFilters = window.dashboardFilters || {
+    regions: new Set(),
+    lifeRange: { min: null, max: null },
+    co2Range: { min: null, max: null },
+  };
 
-  smoothingX.domain(d3.extent(smoothingData, (d) => d.year));
-  smoothingY
-    .domain([
-      d3.min(smoothingData, (d) => d.life_expectancy) - 2,
-      d3.max(smoothingData, (d) => d.life_expectancy) + 2,
-    ])
-    .nice();
+  return aucData.filter((d) => {
+    if (!Number.isFinite(d.life_expectancy)) return false;
 
-  smoothingXAxis.call(
-    d3.axisBottom(smoothingX).ticks(6).tickFormat(d3.format("d")),
+    if (activeIncome && d.income_group && !activeIncome.has(d.income_group)) {
+      return false;
+    }
+
+    if (
+      dashboardFilters.regions?.size &&
+      d.region &&
+      !dashboardFilters.regions.has(d.region)
+    ) {
+      return false;
+    }
+
+    if (Number.isFinite(selectedYear) && d.year !== selectedYear) {
+      return false;
+    }
+
+    const { lifeRange, co2Range } = dashboardFilters;
+    if (lifeRange?.min != null && d.life_expectancy < lifeRange.min)
+      return false;
+    if (lifeRange?.max != null && d.life_expectancy > lifeRange.max)
+      return false;
+
+    if (Number.isFinite(d.co2)) {
+      if (co2Range?.min != null && d.co2 < co2Range.min) return false;
+      if (co2Range?.max != null && d.co2 > co2Range.max) return false;
+    }
+
+    return true;
+  });
+}
+
+function computeAUCFromYearlyMeans(yearlyRows) {
+  const sorted = [...yearlyRows].sort((a, b) => a.year - b.year);
+  if (!sorted.length) return null;
+  if (sorted.length === 1) {
+    return {
+      aucRaw: sorted[0].life,
+      aucNormalized: sorted[0].life,
+      spanYears: 1,
+    };
+  }
+
+  let aucRaw = 0;
+  for (let i = 0; i < sorted.length - 1; i += 1) {
+    const left = sorted[i];
+    const right = sorted[i + 1];
+    const dx = right.year - left.year;
+    aucRaw += ((left.life + right.life) / 2) * dx;
+  }
+
+  const spanYears = Math.max(
+    1,
+    sorted[sorted.length - 1].year - sorted[0].year,
   );
-  smoothingYAxis.call(d3.axisLeft(smoothingY).ticks(6));
+  return {
+    aucRaw,
+    aucNormalized: aucRaw / spanYears,
+    spanYears,
+  };
+}
 
-  smoothingG.selectAll(".smoothing-raw").remove();
-  smoothingG.selectAll(".smoothing-avg").remove();
-  smoothingG.selectAll(".smoothing-dot").remove();
+function drawSmoothingChart(selectedYear = null) {
+  if (!aucData.length) return;
 
-  const showRaw = d3.select("#toggle-raw").property("checked");
-  const showAvg = d3.select("#toggle-avg").property("checked");
+  const rows = getFilteredAucRows(selectedYear);
 
-  if (showRaw) {
-    smoothingG
-      .append("path")
-      .datum(smoothingData)
-      .attr("class", "smoothing-raw")
-      .attr("fill", "none")
-      .attr("stroke", "#0f172a")
-      .attr("stroke-width", 1.5)
-      .attr("opacity", 0.6)
-      .attr("d", rawLine);
+  const bars = d3
+    .rollups(
+      rows,
+      (groupRows) => {
+        const yearlyMeans = d3
+          .rollups(
+            groupRows,
+            (v) => d3.mean(v, (d) => d.life_expectancy),
+            (d) => d.year,
+          )
+          .map(([year, life]) => ({ year, life }))
+          .filter((d) => Number.isFinite(d.life));
+
+        const aucStats = computeAUCFromYearlyMeans(yearlyMeans);
+        return {
+          aucRaw: aucStats?.aucRaw ?? null,
+          aucNormalized: aucStats?.aucNormalized ?? null,
+          spanYears: aucStats?.spanYears ?? 0,
+          points: groupRows.length,
+        };
+      },
+      (d) => d.income_group,
+    )
+    .map(([income_group, stats]) => ({ income_group, ...stats }))
+    .filter((d) => d.income_group && Number.isFinite(d.aucNormalized))
+    .sort((a, b) => b.aucNormalized - a.aucNormalized);
+
+  if (!bars.length) {
+    aucG.selectAll(".auc-bar").remove();
+    aucG.selectAll(".auc-value").remove();
+    aucXAxis.call(d3.axisBottom(aucX).tickValues([]));
+    aucYAxis.call(d3.axisLeft(aucY).tickValues([]));
+    aucEmptyLabel.style("display", null);
+    return;
   }
 
-  if (showAvg) {
-    smoothingG
-      .append("path")
-      .datum(smoothingData)
-      .attr("class", "smoothing-avg")
-      .attr("fill", "none")
-      .attr("stroke", "#2563eb")
-      .attr("stroke-width", 2.5)
-      .attr("d", avgLine);
-  }
+  aucEmptyLabel.style("display", "none");
 
-  smoothingG
-    .selectAll(".smoothing-dot")
-    .data(smoothingData)
-    .enter()
-    .append("circle")
-    .attr("class", "smoothing-dot")
-    .attr("cx", (d) => smoothingX(d.year))
-    .attr("cy", (d) => smoothingY(d.life_expectancy))
-    .attr("r", 3)
-    .attr("fill", "#0f172a")
-    .attr("opacity", (d) => (d.interpolated_share > 0 ? 0.4 : 0.8))
+  aucX.domain([0, d3.max(bars, (d) => d.aucNormalized) * 1.1]).nice();
+  aucY.domain(bars.map((d) => d.income_group));
+
+  aucXAxis.call(d3.axisBottom(aucX).ticks(6));
+  aucYAxis.call(d3.axisLeft(aucY));
+
+  aucG
+    .selectAll(".auc-bar")
+    .data(bars, (d) => d.income_group)
+    .join("rect")
+    .attr("class", "auc-bar")
+    .attr("x", 0)
+    .attr("y", (d) => aucY(d.income_group))
+    .attr("height", aucY.bandwidth())
+    .attr("width", (d) => aucX(d.aucNormalized))
+    .attr("fill", (d) => incomeColor[d.income_group] || "#64748b")
+    .attr("opacity", 0.9)
     .on("mouseover", (event, d) => {
-      const interpolatedLabel = d.interpolated_share > 0 ? "Yes" : "No";
-      smoothingTooltip
+      aucTooltip
         .style("opacity", 1)
         .html(
-          `Year: ${d.year}<br/>Raw: ${d.life_expectancy.toFixed(1)}<br/>Avg: ${
-            d.life_expectancy_5yr_avg
-              ? d.life_expectancy_5yr_avg.toFixed(1)
-              : "N/A"
-          }<br/>Interpolated: ${interpolatedLabel}`,
+          `${d.income_group}<br/>AUC: ${d.aucRaw.toFixed(1)}<br/>Normalized AUC: ${d.aucNormalized.toFixed(
+            2,
+          )}<br/>Years span: ${d.spanYears}<br/>Filtered records: ${d.points}`,
         );
     })
     .on("mousemove", (event) => {
-      smoothingTooltip
-        .style("left", event.pageX + 12 + "px")
-        .style("top", event.pageY + 12 + "px");
+      aucTooltip
+        .style("left", `${event.pageX + 12}px`)
+        .style("top", `${event.pageY + 12}px`);
     })
-    .on("mouseout", () => smoothingTooltip.style("opacity", 0));
-}
+    .on("mouseout", () => aucTooltip.style("opacity", 0));
 
-d3.selectAll("#toggle-raw, #toggle-avg").on("change", drawSmoothingChart);
+  aucG
+    .selectAll(".auc-value")
+    .data(bars, (d) => d.income_group)
+    .join("text")
+    .attr("class", "auc-value")
+    .attr("x", (d) => aucX(d.aucNormalized) + 6)
+    .attr("y", (d) => aucY(d.income_group) + aucY.bandwidth() / 2)
+    .attr("dominant-baseline", "middle")
+    .style("font-size", "11px")
+    .style("fill", "#1e293b")
+    .text((d) => d.aucNormalized.toFixed(2));
+}

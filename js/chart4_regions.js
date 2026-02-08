@@ -79,10 +79,18 @@ function drawRegionChart() {
 
   const filters = window.dashboardFilters || {};
   const selectedRegions = filters.regions || new Set();
+  const selectedYear = getYearFilter();
+  const isAllYears = selectedYear === (window.ALL_YEARS_VALUE || 2000);
 
-  const filtered = regionData.filter((d) =>
-    selectedRegions.size ? selectedRegions.has(d.region) : true,
-  );
+  const filtered = regionData.filter((d) => {
+    // Region filter
+    const regionFilter = !selectedRegions.size || selectedRegions.has(d.region);
+    
+    // Year filter
+    const yearFilter = isAllYears || d.year === selectedYear;
+    
+    return regionFilter && yearFilter;
+  });
 
   const grouped = d3.group(filtered, (d) => d.region);
 
