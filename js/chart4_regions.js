@@ -86,8 +86,8 @@ function drawRegionChart() {
     // Region filter
     const regionFilter = !selectedRegions.size || selectedRegions.has(d.region);
     
-    // Year filter
-    const yearFilter = isAllYears || d.year === selectedYear;
+    // Year filter - show all years up to selected year (instead of just single year)
+    const yearFilter = isAllYears || d.year <= selectedYear;
     
     return regionFilter && yearFilter;
   });
@@ -102,6 +102,7 @@ function drawRegionChart() {
 
   regionG.selectAll(".region-line").remove();
   regionG.selectAll(".region-dot").remove();
+  regionG.selectAll(".region-label").remove();
   regionG.selectAll(".region-grid").remove();
 
   regionG
@@ -110,6 +111,7 @@ function drawRegionChart() {
     .call(d3.axisLeft(regionY).ticks(5).tickSize(-regionWidth).tickFormat(""))
     .attr("opacity", 0.12);
 
+  /* ---------- Lines ---------- */
   const lines = regionG.selectAll(".region-line").data(grouped, (d) => d[0]);
 
   lines
@@ -138,4 +140,52 @@ function drawRegionChart() {
       d3.select(this).attr("stroke-width", 2);
       regionTooltip.style("opacity", 0);
     });
+
+  /* ---------- Dots ---------- */
+  const dots = regionG
+    .selectAll(".region-dot")
+    .data(filtered, (d) => `${d.region}-${d.year}`);
+
+  dots
+    .enter()
+    .append("circle")
+    .attr("class", "region-dot")
+    .attr("r", 3.5)
+    .attr("cx", (d) => regionX(d.year))
+    .attr("cy", (d) => regionY(d.life_expectancy))
+    .attr("fill", (d) => regionColor(d.region))
+    .attr("opacity", 0.9)
+    .style("pointer-events", "all")
+    .on("mouseover", function (event, d) {
+      d3.select(this).attr("r", 6);
+
+      regionTooltip.style("opacity", 1).html(`
+        <strong>${d.region}</strong><br/>
+        Year: ${d.year}<br/>
+        Average Life Expectancy: ${d.life_expectancy.toFixed(1)}
+        `);
+    })
+    .on("mousemove", function (event) {
+      regionTooltip
+        .style("left", event.pageX + 12 + "px")
+        .style("top", event.pageY + 12 + "px");
+    })
+    .on("mouseout", function () {
+      d3.select(this).attr("r", 3.5);
+      regionTooltip.style("opacity", 0);
+    });
+
+  /* ---------- End Labels ---------- */
+  const labels = regionG.selectAll(".region-label").data(grouped, (d) => d[0]);
+
+  labels
+    .enter()
+    .append("text")
+    .attr("class", "region-label")
+    .attr("x", regionWidth + 10)
+    .attr("y", (d) => regionY(d[1][d[1].length - 1].life_expectancy))
+    .attr("text-anchor", "start")
+    .attr("fill", (d) => regionColor(d[0]))
+    .attr("font-size", "11px")
+    .text((d) => d[0]);
 }

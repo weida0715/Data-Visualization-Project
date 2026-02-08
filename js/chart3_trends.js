@@ -228,7 +228,7 @@ function drawTrendChart(selectedYear) {
       enter
         .append("text")
         .attr("class", "trend-label")
-        .attr("x", trendWidth + 110)
+        .attr("x", trendWidth + 20)
         .attr("y", (d) => TrendYScale(d[1][d[1].length - 1].life_expectancy))
         .attr("text-anchor", "start")
         .attr("fill", (d) => TrendColorScale(d[0]))

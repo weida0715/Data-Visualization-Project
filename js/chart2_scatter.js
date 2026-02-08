@@ -278,7 +278,7 @@ function drawTrendLines(data) {
     scatterG
       .append("text")
       .attr("class", "trend-label")
-      .attr("x", scatterWidth + 150)
+      .attr("x", scatterWidth + 180)
       .attr("y", r2LabelY[group])
       .attr("text-anchor", "end")
       .attr("fill", scatterColorScale(group))
