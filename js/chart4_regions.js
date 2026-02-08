@@ -77,28 +77,71 @@ d3.csv("dataset/region_year_summary.csv").then((raw) => {
 function drawRegionChart() {
   if (regionData.length === 0) return;
 
-  const filters = window.dashboardFilters || {};
-  const selectedRegions = filters.regions || new Set();
-  const selectedYear = getYearFilter();
-  const isAllYears = selectedYear === (window.ALL_YEARS_VALUE || 2000);
+  // Get data from main dataset instead of summary to apply all filters
+  d3.csv("dataset/life_expectancy_clean.csv").then((rawData) => {
+    const allData = rawData.map((d) => ({
+      region: d.region,
+      income_group: d.income_group,
+      year: +d.year,
+      life_expectancy: +d.life_expectancy,
+      co2: d.co2 === "" ? null : +d.co2,
+    }));
 
-  const filtered = regionData.filter((d) => {
-    // Region filter
-    const regionFilter = !selectedRegions.size || selectedRegions.has(d.region);
-    
-    // Year filter - show all years up to selected year (instead of just single year)
-    const yearFilter = isAllYears || d.year <= selectedYear;
-    
-    return regionFilter && yearFilter;
-  });
+    const filters = window.dashboardFilters || {};
+    const selectedRegions = filters.regions || new Set();
+    const selectedYear = getYearFilter();
+    const isAllYears = selectedYear === (window.ALL_YEARS_VALUE || 2000);
+    const activeIncome = window.activeIncomeGroups instanceof Set ? window.activeIncomeGroups : null;
+    const { lifeRange, co2Range } = filters;
 
-  const grouped = d3.group(filtered, (d) => d.region);
+    const filtered = allData.filter((d) => {
+      // Region filter
+      const regionFilter = !selectedRegions.size || selectedRegions.has(d.region);
+      
+      // Income group filter
+      const incomeFilter = !activeIncome || !d.income_group || activeIncome.has(d.income_group);
+      
+      // Year filter - show all years up to selected year (instead of just single year)
+      const yearFilter = isAllYears || d.year <= selectedYear;
+      
+      // Life expectancy range filter
+      const lifeFilter = (lifeRange.min == null || d.life_expectancy >= lifeRange.min) && 
+                          (lifeRange.max == null || d.life_expectancy <= lifeRange.max);
+      
+      // CO2 range filter
+      const co2Filter = (co2Range.min == null || co2Range.max == null) || 
+                        (Number.isFinite(d.co2) && d.co2 >= co2Range.min && d.co2 <= co2Range.max);
 
-  const xDomain = isAllYears 
-    ? d3.extent(regionData, (d) => d.year) 
-    : [d3.min(regionData, (d) => d.year), selectedYear];
-  regionX.domain(xDomain);
-  regionY.domain(d3.extent(filtered, (d) => d.life_expectancy)).nice();
+      return regionFilter && incomeFilter && yearFilter && lifeFilter && co2Filter;
+    });
+
+    // Calculate regional averages from filtered data
+    const regionalData = d3.rollups(
+      filtered,
+      (v) => ({
+        life_expectancy: d3.mean(v, (d) => d.life_expectancy),
+        count: v.length
+      }),
+      (d) => d.region,
+      (d) => d.year
+    )
+    .flatMap(([region, yearGroups]) => 
+      Array.from(yearGroups, ([year, stats]) => ({
+        region,
+        year: year,
+        life_expectancy: stats.life_expectancy,
+        count: stats.count
+      }))
+    )
+    .filter(d => Number.isFinite(d.life_expectancy));
+
+    const grouped = d3.group(regionalData, (d) => d.region);
+
+    const xDomain = isAllYears 
+      ? d3.extent(regionalData, (d) => d.year) 
+      : [d3.min(regionalData, (d) => d.year), selectedYear];
+    regionX.domain(xDomain);
+    regionY.domain(d3.extent(regionalData, (d) => d.life_expectancy)).nice();
 
   // Custom tick generator to ensure unique integer years
   const xTicks = [];
@@ -162,7 +205,7 @@ function drawRegionChart() {
   /* ---------- Dots ---------- */
   const dots = regionG
     .selectAll(".region-dot")
-    .data(filtered, (d) => `${d.region}-${d.year}`);
+    .data(regionalData, (d) => `${d.region}-${d.year}`);
 
   dots
     .enter()
@@ -174,15 +217,17 @@ function drawRegionChart() {
     .attr("fill", (d) => regionColor(d.region))
     .attr("opacity", 0.9)
     .style("pointer-events", "all")
-    .on("mouseover", function (event, d) {
-      d3.select(this).attr("r", 6);
+        .on("mouseover", function (event, d) {
+          d3.select(this).attr("r", 6);
 
-      regionTooltip.style("opacity", 1).html(`
-        <strong>${d.region}</strong><br/>
-        Year: ${d.year}<br/>
-        Average Life Expectancy: ${d.life_expectancy.toFixed(1)}
-        `);
-    })
+          regionTooltip.style("opacity", 1).html(`
+            <strong>${d.region}</strong><br/>
+            Year: ${d.year}<br/>
+            Region: ${d.region}<br/>
+            Average Life Expectancy: ${d.life_expectancy.toFixed(1)}<br/>
+            Countries: ${d.count}
+            `);
+        })
     .on("mousemove", function (event) {
       regionTooltip
         .style("left", event.pageX + 12 + "px")
@@ -206,4 +251,5 @@ function drawRegionChart() {
     .attr("fill", (d) => regionColor(d[0]))
     .attr("font-size", "11px")
     .text((d) => d[0]);
+  });
 }

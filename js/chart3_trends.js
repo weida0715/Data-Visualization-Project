@@ -120,147 +120,200 @@ d3.csv("dataset/income_year_summary.csv").then((raw) => {
 function drawTrendChart(selectedYear) {
   const activeGroups = getActiveGroups();
   const isAllYears = !Number.isFinite(selectedYear);
-  const filtered = data.filter(
-    (d) =>
-      activeGroups.has(d.income_group) &&
-      (isAllYears || d.year <= selectedYear),
-  );
-
-  const grouped = d3.group(filtered, (d) => d.income_group);
-
-  trendG.selectAll(".trend-line").remove();
-  trendG.selectAll(".trend-dot").remove();
-  trendG.selectAll(".trend-label").remove();
-
-  /* ---------- Scales ---------- */
-  const xDomain = isAllYears 
-    ? d3.extent(data, (d) => d.year) 
-    : [d3.min(data, (d) => d.year), selectedYear];
-  TrendXScale.domain(xDomain);
-  TrendYScale.domain([40, 85]); // fixed = fair comparison
-
-  // Custom tick generator to ensure unique integer years
-  const xTicks = [];
-  const xStart = Math.floor(xDomain[0]);
-  const xEnd = Math.ceil(xDomain[1]);
-  const tickStep = Math.max(1, Math.floor((xEnd - xStart) / 5)); // Aim for ~5-6 ticks
   
-  for (let i = xStart; i <= xEnd; i += tickStep) {
-    xTicks.push(i);
-  }
-  
-  // Add final tick if not included
-  if (xTicks[xTicks.length - 1] < xEnd) {
-    xTicks.push(xEnd);
-  }
-  
-  xAxisG.call(d3.axisBottom(TrendXScale).tickValues(xTicks).tickFormat(d3.format("d")));
-  yAxisG.call(d3.axisLeft(TrendYScale).ticks(6));
+  // Get data from main dataset instead of summary to apply all filters
+  d3.csv("dataset/life_expectancy_clean.csv").then((rawData) => {
+    const allData = rawData.map((d) => ({
+      income_group: d.income_group,
+      region: d.region,
+      year: +d.year,
+      life_expectancy: +d.life_expectancy,
+      co2: d.co2 === "" ? null : +d.co2,
+    }));
 
-  trendG.selectAll(".trend-grid").remove();
-  trendG
-    .append("g")
-    .attr("class", "trend-grid")
-    .call(
-      d3.axisLeft(TrendYScale).ticks(5).tickSize(-trendWidth).tickFormat(""),
+    const filters = window.dashboardFilters || {};
+    const selectedRegions = filters.regions || new Set();
+    const { lifeRange, co2Range } = filters;
+
+    const filtered = allData.filter((d) => {
+      // Income group filter
+      const incomeFilter = activeGroups.has(d.income_group);
+      
+      // Region filter
+      const regionFilter = !selectedRegions.size || selectedRegions.has(d.region);
+      
+      // Year filter - show all years up to selected year (instead of just single year)
+      const yearFilter = isAllYears || d.year <= selectedYear;
+      
+      // Life expectancy range filter
+      const lifeFilter = (lifeRange.min == null || d.life_expectancy >= lifeRange.min) && 
+                          (lifeRange.max == null || d.life_expectancy <= lifeRange.max);
+      
+      // CO2 range filter
+      const co2Filter = (co2Range.min == null || co2Range.max == null) || 
+                        (Number.isFinite(d.co2) && d.co2 >= co2Range.min && d.co2 <= co2Range.max);
+
+      return incomeFilter && regionFilter && yearFilter && lifeFilter && co2Filter;
+    });
+
+    // Calculate income group averages from filtered data
+    const incomeGroupData = d3.rollups(
+      filtered,
+      (v) => ({
+        life_expectancy: d3.mean(v, (d) => d.life_expectancy),
+        count: v.length
+      }),
+      (d) => d.income_group,
+      (d) => d.year
     )
-    .attr("opacity", 0.12);
+    .flatMap(([income_group, yearGroups]) => 
+      Array.from(yearGroups, ([year, stats]) => ({
+        income_group,
+        year: year,
+        life_expectancy: stats.life_expectancy,
+        count: stats.count
+      }))
+    )
+    .filter(d => Number.isFinite(d.life_expectancy));
 
-  if (filtered.length === 0) {
-    return;
-  }
+    const grouped = d3.group(incomeGroupData, (d) => d.income_group);
 
-  /* ---------- Lines ---------- */
-  const lines = trendG.selectAll(".trend-line").data(grouped, (d) => d[0]);
+    trendG.selectAll(".trend-line").remove();
+    trendG.selectAll(".trend-dot").remove();
+    trendG.selectAll(".trend-label").remove();
 
-  lines.join(
-    (enter) =>
-      enter
-        .append("path")
-        .attr("class", "trend-line")
-        .attr("fill", "none")
-        .attr("stroke", (d) => TrendColorScale(d[0]))
-        .attr("stroke-width", 2)
-        .attr("opacity", 0.9)
-        .attr("d", (d) => lineGen(d[1])),
+    /* ---------- Scales ---------- */
+    const xDomain = isAllYears 
+      ? d3.extent(incomeGroupData, (d) => d.year) 
+      : [d3.min(incomeGroupData, (d) => d.year), selectedYear];
+    TrendXScale.domain(xDomain);
+    TrendYScale.domain([40, 85]); // fixed = fair comparison
 
-    (update) =>
-      update
-        .transition()
-        .duration(700)
-        .attr("d", (d) => lineGen(d[1])),
+    // Custom tick generator to ensure unique integer years
+    const xTicks = [];
+    const xStart = Math.floor(xDomain[0]);
+    const xEnd = Math.ceil(xDomain[1]);
+    const tickStep = Math.max(1, Math.floor((xEnd - xStart) / 5)); // Aim for ~5-6 ticks
+    
+    for (let i = xStart; i <= xEnd; i += tickStep) {
+      xTicks.push(i);
+    }
+    
+    // Add final tick if not included
+    if (xTicks[xTicks.length - 1] < xEnd) {
+      xTicks.push(xEnd);
+    }
+    
+    xAxisG.call(d3.axisBottom(TrendXScale).tickValues(xTicks).tickFormat(d3.format("d")));
+    yAxisG.call(d3.axisLeft(TrendYScale).ticks(6));
 
-    (exit) => exit.remove(),
-  );
+    trendG.selectAll(".trend-grid").remove();
+    trendG
+      .append("g")
+      .attr("class", "trend-grid")
+      .call(
+        d3.axisLeft(TrendYScale).ticks(5).tickSize(-trendWidth).tickFormat(""),
+      )
+      .attr("opacity", 0.12);
 
-  /* ---------- Dots ---------- */
-  const dots = trendG
-    .selectAll(".trend-dot")
-    .data(filtered, (d) => `${d.income_group}-${d.year}`);
+    if (incomeGroupData.length === 0) {
+      return;
+    }
 
-  dots.join(
-    (enter) =>
-      enter
-        .append("circle")
-        .attr("class", "trend-dot")
-        .attr("r", 3.5)
-        .attr("cx", (d) => TrendXScale(d.year))
-        .attr("cy", (d) => TrendYScale(d.life_expectancy))
-        .attr("fill", (d) => TrendColorScale(d.income_group))
-        .attr("opacity", 0.9)
-        .style("pointer-events", "all")
-        .on("mouseover", function (event, d) {
-          d3.select(this).attr("r", 6);
+    /* ---------- Lines ---------- */
+    const lines = trendG.selectAll(".trend-line").data(grouped, (d) => d[0]);
 
-          trendTooltip.style("opacity", 1).html(`
-            <strong>${d.income_group}</strong><br/>
-            Year: ${d.year}<br/>
-            Average Life Expectancy: ${d.life_expectancy.toFixed(1)}
-            `);
-        })
-        .on("mousemove", function (event) {
-          trendTooltip
-            .style("left", event.pageX + 12 + "px")
-            .style("top", event.pageY + 12 + "px");
-        })
-        .on("mouseout", function () {
-          d3.select(this).attr("r", 3.5);
-          trendTooltip.style("opacity", 0);
-        }),
+    lines.join(
+      (enter) =>
+        enter
+          .append("path")
+          .attr("class", "trend-line")
+          .attr("fill", "none")
+          .attr("stroke", (d) => TrendColorScale(d[0]))
+          .attr("stroke-width", 2)
+          .attr("opacity", 0.9)
+          .attr("d", (d) => lineGen(d[1])),
 
-    (update) =>
-      update
-        .transition()
-        .duration(700)
-        .attr("cx", (d) => TrendXScale(d.year))
-        .attr("cy", (d) => TrendYScale(d.life_expectancy)),
+      (update) =>
+        update
+          .transition()
+          .duration(700)
+          .attr("d", (d) => lineGen(d[1])),
 
-    (exit) => exit.remove(),
-  );
+      (exit) => exit.remove(),
+    );
 
-  /* ---------- End Labels ---------- */
-  const labels = trendG.selectAll(".trend-label").data(grouped, (d) => d[0]);
+    /* ---------- Dots ---------- */
+    const dots = trendG
+      .selectAll(".trend-dot")
+      .data(incomeGroupData, (d) => `${d.income_group}-${d.year}`);
 
-  labels.join(
-    (enter) =>
-      enter
-        .append("text")
-        .attr("class", "trend-label")
-        .attr("x", trendWidth + 20)
-        .attr("y", (d) => TrendYScale(d[1][d[1].length - 1].life_expectancy))
-        .attr("text-anchor", "start")
-        .attr("fill", (d) => TrendColorScale(d[0]))
-        .attr("font-size", "11px")
-        .text((d) => d[0]),
+    dots.join(
+      (enter) =>
+        enter
+          .append("circle")
+          .attr("class", "trend-dot")
+          .attr("r", 3.5)
+          .attr("cx", (d) => TrendXScale(d.year))
+          .attr("cy", (d) => TrendYScale(d.life_expectancy))
+          .attr("fill", (d) => TrendColorScale(d.income_group))
+          .attr("opacity", 0.9)
+          .style("pointer-events", "all")
+          .on("mouseover", function (event, d) {
+            d3.select(this).attr("r", 6);
 
-    (update) =>
-      update
-        .transition()
-        .duration(700)
-        .attr("y", (d) => TrendYScale(d[1][d[1].length - 1].life_expectancy)),
+            trendTooltip.style("opacity", 1).html(`
+              <strong>${d.income_group}</strong><br/>
+              Year: ${d.year}<br/>
+              Income Group: ${d.income_group}<br/>
+              Average Life Expectancy: ${d.life_expectancy.toFixed(1)}<br/>
+              Countries: ${d.count}
+              `);
+          })
+          .on("mousemove", function (event) {
+            trendTooltip
+              .style("left", event.pageX + 12 + "px")
+              .style("top", event.pageY + 12 + "px");
+          })
+          .on("mouseout", function () {
+            d3.select(this).attr("r", 3.5);
+            trendTooltip.style("opacity", 0);
+          }),
 
-    (exit) => exit.remove(),
-  );
+      (update) =>
+        update
+          .transition()
+          .duration(700)
+          .attr("cx", (d) => TrendXScale(d.year))
+          .attr("cy", (d) => TrendYScale(d.life_expectancy)),
+
+      (exit) => exit.remove(),
+    );
+
+    /* ---------- End Labels ---------- */
+    const labels = trendG.selectAll(".trend-label").data(grouped, (d) => d[0]);
+
+    labels.join(
+      (enter) =>
+        enter
+          .append("text")
+          .attr("class", "trend-label")
+          .attr("x", trendWidth + 20)
+          .attr("y", (d) => TrendYScale(d[1][d[1].length - 1].life_expectancy))
+          .attr("text-anchor", "start")
+          .attr("fill", (d) => TrendColorScale(d[0]))
+          .attr("font-size", "11px")
+          .text((d) => d[0]),
+
+      (update) =>
+        update
+          .transition()
+          .duration(700)
+          .attr("y", (d) => TrendYScale(d[1][d[1].length - 1].life_expectancy)),
+
+      (exit) => exit.remove(),
+    );
+  });
 }
 
 // Note: checkbox handler managed in main.js for synchronized updates

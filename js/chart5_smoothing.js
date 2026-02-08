@@ -77,8 +77,7 @@ d3.csv("dataset/life_expectancy_clean.csv").then((raw) => {
 });
 
 function getFilteredAucRows(selectedYear) {
-  const activeIncome =
-    window.activeIncomeGroups instanceof Set ? window.activeIncomeGroups : null;
+  const activeIncome = window.activeIncomeGroups instanceof Set ? window.activeIncomeGroups : null;
   const dashboardFilters = window.dashboardFilters || {
     regions: new Set(),
     lifeRange: { min: null, max: null },
@@ -92,14 +91,12 @@ function getFilteredAucRows(selectedYear) {
       return false;
     }
 
-    if (
-      dashboardFilters.regions?.size &&
-      d.region &&
-      !dashboardFilters.regions.has(d.region)
-    ) {
+    if (dashboardFilters.regions?.size && d.region && !dashboardFilters.regions.has(d.region)) {
       return false;
     }
 
+    // Year filter - if specific year is selected, only include that year
+    // If all years selected (null), include all years
     if (Number.isFinite(selectedYear) && d.year !== selectedYear) {
       return false;
     }
@@ -110,9 +107,19 @@ function getFilteredAucRows(selectedYear) {
     if (lifeRange?.max != null && d.life_expectancy > lifeRange.max)
       return false;
 
-    if (Number.isFinite(d.co2)) {
-      if (co2Range?.min != null && d.co2 < co2Range.min) return false;
-      if (co2Range?.max != null && d.co2 > co2Range.max) return false;
+    // Apply CO2 range filter only if both min and max are defined
+    if (co2Range?.min != null && co2Range?.max != null) {
+      if (!Number.isFinite(d.co2) || d.co2 < co2Range.min || d.co2 > co2Range.max) {
+        return false;
+      }
+    } else if (co2Range?.min != null) {
+      if (!Number.isFinite(d.co2) || d.co2 < co2Range.min) {
+        return false;
+      }
+    } else if (co2Range?.max != null) {
+      if (!Number.isFinite(d.co2) || d.co2 > co2Range.max) {
+        return false;
+      }
     }
 
     return true;

@@ -112,11 +112,11 @@ function handleMouseOver(event, d) {
     row
       ? `
         <strong>${row.country}</strong><br/>
-        ${currentIsAllYears ? "Avg Life Expectancy" : "Life Expectancy"}: ${
-          row.life_expectancy
-        }<br/>
+        Year: ${currentIsAllYears ? "All Years" : getYearFilter()}<br/>
         Income Group: ${row.income_group}<br/>
-        Region: ${row.region}
+        Region: ${row.region}<br/>
+        ${currentIsAllYears ? "Avg Life Expectancy" : "Life Expectancy"}: ${row.life_expectancy.toFixed(1)}<br/>
+        Avg CO₂ Emissions: ${row.co2 ? row.co2.toLocaleString() : "N/A"}
       `
       : `
         <strong>${d.properties.ADMIN}</strong><br/>
@@ -187,13 +187,14 @@ function drawLifeExpectancyMap(selectedYear) {
             income_group: values[0].income_group,
             region: values[0].region,
             life_expectancy: d3.mean(values, (v) => +v.life_expectancy),
+            co2: d3.mean(values, (v) => v.co2 && !isNaN(v.co2) ? +v.co2 : null)
           }),
           (d) => d.country_code,
         )
         .map(([, value]) => value)
     : filtered
         .filter((d) => +d.year === selectedYear)
-        .map((d) => ({ ...d, life_expectancy: +d.life_expectancy }));
+        .map((d) => ({ ...d, life_expectancy: +d.life_expectancy, co2: d.co2 ? +d.co2 : null }));
 
   const lifeRange = filters.lifeRange || { min: null, max: null };
   const filteredByLife = yearData.filter((d) => {

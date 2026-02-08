@@ -150,7 +150,6 @@ body::after {
   grid-template-columns: repeat(11, minmax(0, 1fr));
   font-size: 0.7rem;
   color: #64748b;
-  margin-top: 8px;
   text-transform: uppercase;
   letter-spacing: 0.16em;
   align-items: center;
@@ -242,6 +241,8 @@ body::after {
   max-height: calc(100vh - 180px);
   overflow-y: auto;
   transition: all 0.3s ease;
+  scrollbar-color: #bfd4ff #eef4ff;
+  direction: rtl;
 }
 
 .filter-panel.collapsed {

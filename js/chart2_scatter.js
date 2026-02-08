@@ -203,11 +203,11 @@ function drawScatter(selectedYear) {
     .on("mouseover", (event, d) => {
       scatterTooltip.style("opacity", 1).html(`
         <strong>${d.country}</strong><br/>
-        ${isAllYears ? "Avg Life Expectancy" : "Life Expectancy"}: ${d.life_expectancy.toFixed(
-          1,
-        )}<br/>
-        ${isAllYears ? "Avg CO₂" : "CO₂"}: ${d.co2.toLocaleString()}<br/>
-        Income Group: ${d.income_group}
+        Year: ${isAllYears ? "All Years" : selectedYear}<br/>
+        Income Group: ${d.income_group}<br/>
+        Region: ${d.region}<br/>
+        ${isAllYears ? "Avg Life Expectancy" : "Life Expectancy"}: ${d.life_expectancy.toFixed(1)}<br/>
+        ${isAllYears ? "Avg CO₂" : "CO₂"}: ${d.co2.toLocaleString()}
       `);
     })
     .on("mousemove", (event) => {
